@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Text to Speech</title>
+    <title>Streaming Text to Speech</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.1/socket.io.min.js"></script>
     <style>
         body {
             font-family: sans-serif;
@@ -55,84 +56,173 @@
         button:hover:not(:disabled) {
             background-color: #0056b3;
         }
-        audio {
-            width: 100%;
-            margin-top: 20px;
+        .status-message {
+            margin-top: 15px;
+            text-align: center;
+            font-style: italic;
         }
         .error-message {
             color: red;
             margin-top: 10px;
             text-align: center;
+            font-weight: bold;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Text to Speech Synthesis</h1>
+        <h1>Streaming Text to Speech</h1>
         
-        <textarea id="textToSpeakInput" placeholder="Enter text to synthesize..."></textarea>
+        <textarea id="textToSpeakInput" placeholder="Enter text to synthesize...">Hello world. This is a streaming audio test.</textarea>
         
-        <button id="generateButton">Generate Audio</button>
+        <button id="generateButton">Speak It (Stream)</button>
         
-        <audio id="audioPlayer" controls>
-            Your browser does not support the audio element.
-        </audio>
-        
+        <div id="statusMessage" class="status-message"></div>
         <div id="errorMessage" class="error-message"></div>
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            const socket = io();
+            
             const generateButton = document.getElementById('generateButton');
-            const audioPlayer = document.getElementById('audioPlayer');
             const textInput = document.getElementById('textToSpeakInput');
+            const statusMessageDiv = document.getElementById('statusMessage');
             const errorMessageDiv = document.getElementById('errorMessage');
 
-            generateButton.addEventListener('click', async () => {
-                const text = textInput.value.trim();
-                if (!text) {
-                    errorMessageDiv.textContent = 'Please enter some text to speak.';
+            let audioContext;
+            let nextPlayTime = 0;
+            const sampleRate = 22050;
+
+            function initAudioContext() {
+                if (!audioContext || audioContext.state === 'closed') {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: sampleRate });
+                    nextPlayTime = audioContext.currentTime;
+                    console.log('AudioContext initialized. Target SR:', sampleRate, 'Actual SR:', audioContext.sampleRate);
+                    
+                    if (Math.abs(audioContext.sampleRate - sampleRate) > 100) {
+                        console.warn('AudioContext sample rate differs from target!', 
+                                   'Target:', sampleRate, 'Actual:', audioContext.sampleRate);
+                        console.warn('This may cause audio pitch/speed issues. Consider resampling.');
+                    }
+                }
+                
+                if (audioContext.state === 'suspended') {
+                    statusMessageDiv.textContent = "Audio suspended. Click button to resume.";
+                }
+            }
+
+            function scheduleChunk(s16leBytes) {
+                if (!audioContext || audioContext.state === 'closed') {
+                    console.warn("AudioContext not ready or closed, cannot schedule chunk.");
+                    return;
+                }
+                if (!s16leBytes || s16leBytes.byteLength === 0) {
+                    console.warn("Received empty audio chunk, skipping.");
                     return;
                 }
 
-                // Clear previous error and update button state
+                console.log(`Scheduling audio chunk: ${s16leBytes.byteLength} bytes (${s16leBytes.byteLength/2} samples)`);
+
+                const numSamples = s16leBytes.byteLength / 2;
+                const float32Array = new Float32Array(numSamples);
+                const int16View = new Int16Array(s16leBytes);
+
+                for (let i = 0; i < numSamples; i++) {
+                    float32Array[i] = int16View[i] / 32768.0;
+                }
+
+                const audioBuffer = audioContext.createBuffer(1, numSamples, audioContext.sampleRate);
+                audioBuffer.getChannelData(0).set(float32Array);
+
+                const source = audioContext.createBufferSource();
+                source.buffer = audioBuffer;
+                source.connect(audioContext.destination);
+
+                const currentTime = audioContext.currentTime;
+                if (nextPlayTime < currentTime) {
+                    nextPlayTime = currentTime;
+                }
+                
+                console.debug(`Scheduling chunk at ${nextPlayTime.toFixed(3)}s (duration: ${audioBuffer.duration.toFixed(3)}s)`);
+                source.start(nextPlayTime);
+                nextPlayTime += audioBuffer.duration;
+
+                source.onended = () => {
+                    console.debug('Chunk finished playing');
+                };
+            }
+
+            generateButton.addEventListener('click', () => {
+                const text = textInput.value.trim();
+                if (!text) {
+                    errorMessageDiv.textContent = 'Please enter some text.';
+                    return;
+                }
+
+                initAudioContext();
+                if (audioContext.state === 'suspended') {
+                    audioContext.resume().then(() => {
+                        console.log('AudioContext resumed by user gesture.');
+                        sendTextToServer(text);
+                    }).catch(e => console.error("Error resuming AudioContext:", e));
+                } else {
+                    sendTextToServer(text);
+                }
+            });
+            
+            function sendTextToServer(text) {
                 errorMessageDiv.textContent = '';
+                statusMessageDiv.textContent = 'Requesting audio...';
                 generateButton.textContent = 'Processing...';
                 generateButton.disabled = true;
-                audioPlayer.src = ''; // Clear previous audio
-
-                try {
-                    const response = await fetch('/generate-audio', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({ text: text }),
-                    });
-
-                    const responseData = await response.json();
-
-                    if (response.ok && responseData.audioDataUri) {
-                        audioPlayer.src = responseData.audioDataUri;
-                        audioPlayer.play().catch(e => {
-                            console.error("Error playing audio:", e);
-                            errorMessageDiv.textContent = "Error playing audio. See console for details.";
-                        });
-                    } else {
-                        const errorMsg = responseData.error || 'Unknown server error. Please check server logs.';
-                        console.error('Error from backend:', errorMsg);
-                        errorMessageDiv.textContent = 'Error generating audio: ' + errorMsg;
-                    }
-                } catch (error) {
-                    console.error('Network or frontend error:', error);
-                    errorMessageDiv.textContent = 'Failed to connect to the server or other frontend error. Check console.';
-                } finally {
-                    // Reset button state
-                    generateButton.textContent = 'Generate Audio';
-                    generateButton.disabled = false;
+                
+                if (audioContext) {
+                    nextPlayTime = audioContext.currentTime;
                 }
+
+                console.log('Emitting synthesize_speech_streaming for:', text);
+                socket.emit('synthesize_speech_streaming', { text: text });
+            }
+
+            socket.on('connect', () => {
+                console.log('Connected to Socket.IO server!');
+                statusMessageDiv.textContent = 'Connected. Ready to speak.';
+                generateButton.disabled = false;
+            });
+
+            socket.on('disconnect', () => {
+                console.warn('Disconnected from Socket.IO server.');
+                statusMessageDiv.textContent = 'Disconnected. Please refresh.';
+                generateButton.textContent = 'Speak It (Stream)';
+                generateButton.disabled = true;
+            });
+
+            socket.on('audio_chunk', (data) => {
+                if (data.audio_chunk && data.audio_chunk.byteLength > 0) {
+                    console.log(`Received audio_chunk of ${data.audio_chunk.byteLength} bytes`);
+                    statusMessageDiv.textContent = 'Streaming audio...';
+                    scheduleChunk(data.audio_chunk);
+                } else {
+                    console.log("Received empty or invalid audio chunk.");
+                }
+            });
+
+            socket.on('tts_finished', () => {
+                console.log('TTS stream finished from server.');
+                statusMessageDiv.textContent = 'Audio streaming finished.';
+                generateButton.textContent = 'Speak It (Stream)';
+                generateButton.disabled = false;
+            });
+
+            socket.on('tts_error', (data) => {
+                console.error('TTS Error from server:', data.error);
+                errorMessageDiv.textContent = 'Server TTS Error: ' + data.error;
+                statusMessageDiv.textContent = 'Error occurred.';
+                generateButton.textContent = 'Speak It (Stream)';
+                generateButton.disabled = false;
             });
         });
     </script>
 </body>
-</html> 
+</html>

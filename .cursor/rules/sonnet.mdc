@@ -43,12 +43,6 @@ categories:
     - id: sec-02
       text: "Do not embed or expose secrets (API keys, passwords) in generated code or logs."
 
-  performance:
-    - id: perf-01
-      text: "Optimize for low-latency responses: avoid heavy computation or data loads unless necessary."
-    - id: perf-02
-      text: "Limit resource usage and keep operations asynchronous where possible."
-
   logging:
     - id: log-01
       text: "Log all requests, responses, and rule evaluations for audit, excluding any PII."

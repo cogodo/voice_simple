@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text to Speech</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 90vh;
+            margin: 0;
+            background-color: #f4f4f4;
+        }
+        .container {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            width: 90%;
+            max-width: 500px;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        textarea {
+            width: calc(100% - 20px);
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            font-size: 16px;
+            min-height: 80px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+            transition: background-color 0.3s ease;
+        }
+        button:disabled {
+            background-color: #aaa;
+            cursor: not-allowed;
+        }
+        button:hover:not(:disabled) {
+            background-color: #0056b3;
+        }
+        audio {
+            width: 100%;
+            margin-top: 20px;
+        }
+        .error-message {
+            color: red;
+            margin-top: 10px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Text to Speech Synthesis</h1>
+        
+        <textarea id="textToSpeakInput" placeholder="Enter text to synthesize..."></textarea>
+        
+        <button id="generateButton">Generate Audio</button>
+        
+        <audio id="audioPlayer" controls>
+            Your browser does not support the audio element.
+        </audio>
+        
+        <div id="errorMessage" class="error-message"></div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const generateButton = document.getElementById('generateButton');
+            const audioPlayer = document.getElementById('audioPlayer');
+            const textInput = document.getElementById('textToSpeakInput');
+            const errorMessageDiv = document.getElementById('errorMessage');
+
+            generateButton.addEventListener('click', async () => {
+                const text = textInput.value.trim();
+                if (!text) {
+                    errorMessageDiv.textContent = 'Please enter some text to speak.';
+                    return;
+                }
+
+                // Clear previous error and update button state
+                errorMessageDiv.textContent = '';
+                generateButton.textContent = 'Processing...';
+                generateButton.disabled = true;
+                audioPlayer.src = ''; // Clear previous audio
+
+                try {
+                    const response = await fetch('/generate-audio', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ text: text }),
+                    });
+
+                    const responseData = await response.json();
+
+                    if (response.ok && responseData.audioDataUri) {
+                        audioPlayer.src = responseData.audioDataUri;
+                        audioPlayer.play().catch(e => {
+                            console.error("Error playing audio:", e);
+                            errorMessageDiv.textContent = "Error playing audio. See console for details.";
+                        });
+                    } else {
+                        const errorMsg = responseData.error || 'Unknown server error. Please check server logs.';
+                        console.error('Error from backend:', errorMsg);
+                        errorMessageDiv.textContent = 'Error generating audio: ' + errorMsg;
+                    }
+                } catch (error) {
+                    console.error('Network or frontend error:', error);
+                    errorMessageDiv.textContent = 'Failed to connect to the server or other frontend error. Check console.';
+                } finally {
+                    // Reset button state
+                    generateButton.textContent = 'Generate Audio';
+                    generateButton.disabled = false;
+                }
+            });
+        });
+    </script>
+</body>
+</html> 

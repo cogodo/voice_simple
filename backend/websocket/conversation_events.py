@@ -2,7 +2,7 @@
 Conversation-related WebSocket event handlers for the Voice Agent backend.
 """
 from flask_socketio import emit
-from ..services.openai_handler import create_conversation_manager
+from services.openai_handler import create_conversation_manager
 
 
 def register_conversation_events(socketio, app):

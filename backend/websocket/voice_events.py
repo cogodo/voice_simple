@@ -4,7 +4,7 @@ Voice-related WebSocket event handlers for the Voice Agent backend.
 from flask import request
 from flask_socketio import emit
 import base64
-from ..services.whisper_handler import transcribe_audio, is_audio_valid, get_conversation_context
+from services.whisper_handler import transcribe_audio, is_audio_valid, get_conversation_context
 
 
 def register_voice_events(socketio, app, voice_sessions):

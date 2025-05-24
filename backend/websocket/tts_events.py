@@ -2,7 +2,7 @@
 Text-to-Speech related WebSocket event handlers for the Voice Agent backend.
 """
 from flask_socketio import emit
-from ..services.voice_synthesis import my_processing_function_streaming
+from services.voice_synthesis import my_processing_function_streaming
 
 
 def register_tts_events(socketio, app):

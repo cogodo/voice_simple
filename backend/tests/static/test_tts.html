@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TTS Streaming Test</title>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 10px;
+        }
+
+        #log {
+            background: #f0f0f0;
+            padding: 15px;
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+        }
+
+        .chunk {
+            color: #0066cc;
+        }
+
+        .error {
+            color: #cc0000;
+        }
+
+        .success {
+            color: #00aa00;
+        }
+
+        input[type="text"] {
+            width: 500px;
+            padding: 8px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🎤 TTS Streaming Test</h1>
+        <p>Test the Socket.IO TTS streaming functionality</p>
+
+        <div>
+            <input type="text" id="textInput" placeholder="Enter text to synthesize..."
+                value="Hello! This is a test of the streaming audio system.">
+            <button onclick="connectSocket()">Connect</button>
+            <button onclick="testTTS()">Test TTS</button>
+            <button onclick="clearLog()">Clear Log</button>
+        </div>
+
+        <h3>📝 Event Log:</h3>
+        <div id="log"></div>
+    </div>
+
+    <script>
+        let socket = null;
+        let audioChunks = 0;
+        let totalBytes = 0;
+
+        function log(message, className = '') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `<div class="${className}">[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function connectSocket() {
+            if (socket) {
+                socket.disconnect();
+            }
+
+            socket = io('http://localhost:8000');
+
+            socket.on('connect', () => {
+                log('✅ Connected to server', 'success');
+            });
+
+            socket.on('disconnect', () => {
+                log('❌ Disconnected from server', 'error');
+            });
+
+            socket.on('connect_error', (error) => {
+                log(`❌ Connection error: ${error}`, 'error');
+            });
+
+            socket.on('tts_starting', (data) => {
+                log(`🎤 TTS starting: ${data.status}`, 'success');
+                audioChunks = 0;
+                totalBytes = 0;
+            });
+
+            socket.on('audio_chunk', (data) => {
+                audioChunks++;
+                const chunkSize = data.audio_chunk ? data.audio_chunk.length : 0;
+                totalBytes += chunkSize;
+                log(`📦 Audio chunk ${audioChunks}: ${chunkSize} bytes`, 'chunk');
+            });
+
+            socket.on('tts_finished', (data) => {
+                log(`🏁 TTS finished: ${data.status}. Total: ${audioChunks} chunks, ${totalBytes} bytes`, 'success');
+            });
+
+            socket.on('tts_error', (data) => {
+                log(`❌ TTS error: ${data.error}`, 'error');
+            });
+        }
+
+        function testTTS() {
+            if (!socket || !socket.connected) {
+                log('❌ Not connected to server. Click Connect first.', 'error');
+                return;
+            }
+
+            const text = document.getElementById('textInput').value.trim();
+            if (!text) {
+                log('❌ No text entered', 'error');
+                return;
+            }
+
+            log(`🎯 Testing TTS with: "${text}"`, 'success');
+            socket.emit('synthesize_speech_streaming', { text: text });
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+
+        // Auto-connect on page load
+        window.onload = () => {
+            connectSocket();
+        };
+    </script>
+</body>
+
+</html>

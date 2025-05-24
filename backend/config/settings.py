@@ -4,8 +4,27 @@ Configuration settings for the Voice Agent backend.
 import os
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from .env file in the project root
+# Get the project root directory (parent of the backend directory)
+backend_dir = os.path.dirname(os.path.abspath(__file__))  # config directory
+backend_parent = os.path.dirname(backend_dir)  # backend directory
+project_root = os.path.dirname(backend_parent)  # project root directory
+env_path = os.path.join(project_root, '.env')
+
+# Try to load .env file
+if os.path.exists(env_path):
+    load_dotenv(env_path)
+    print(f"✓ Loaded .env file from: {env_path}")
+else:
+    print(f"⚠️  WARNING: No .env file found at: {env_path}")
+    print(f"Please create a .env file with your API keys:")
+    print(f"OPENAI_API_KEY=your_openai_key_here")
+    print(f"CARTESIA_API_KEY=your_cartesia_key_here")
+    print(f"")
+    print(f"You can copy .env.example and fill in your keys.")
+    response = input("Continue anyway? (y/N): ")
+    if response.lower() != 'y':
+        exit(1)
 
 class Config:
     """Base configuration class."""

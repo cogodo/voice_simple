@@ -69,9 +69,19 @@ def create_app(config_name=None):
             'version': '1.0.0',
             'endpoints': {
                 'websocket': 'Connect to SocketIO for real-time communication',
-                'health': '/health for health checks'
+                'health': '/health for health checks',
+                'test': '/test for TTS streaming test page'
             }
         }
+    
+    # Test page for TTS streaming
+    @app.route('/test')
+    def test_page():
+        """Serve the TTS streaming test page."""
+        from flask import send_file
+        import os
+        test_file = os.path.join(os.path.dirname(__file__), 'tests', 'static', 'test_tts.html')
+        return send_file(test_file)
     
     return app, socketio
 

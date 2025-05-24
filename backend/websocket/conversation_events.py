@@ -3,6 +3,7 @@ Conversation-related WebSocket event handlers for the Voice Agent backend.
 """
 from flask_socketio import emit
 from services.openai_handler import create_conversation_manager
+import time
 
 
 def register_conversation_events(socketio, app):
@@ -70,14 +71,15 @@ def register_conversation_events(socketio, app):
                 conversation_manager.add_assistant_message(response)
                 
                 # Emit AI response
-                emit('ai_response', {
+                emit('ai_response_complete', {
+                    'response': response,
                     'role': 'assistant',
                     'content': response,
                     'timestamp': conversation_manager.get_current_timestamp()
                 })
                 
                 # Automatically synthesize speech for the response
-                emit('auto_synthesize_speech', {'text': response})
+                _trigger_auto_tts(response, app)
                 
             else:
                 app.logger.error("No response generated from AI")
@@ -138,15 +140,15 @@ def register_conversation_events(socketio, app):
                 conversation_manager.add_assistant_message(response)
                 
                 # Emit AI response
-                emit('ai_response', {
+                emit('ai_response_complete', {
+                    'response': response,
                     'role': 'assistant',
                     'content': response,
-                    'timestamp': conversation_manager.get_current_timestamp(),
-                    'auto_speech': True  # Indicate this should auto-play speech
+                    'timestamp': conversation_manager.get_current_timestamp()
                 })
                 
                 # Automatically synthesize and play speech for voice conversation
-                emit('auto_synthesize_speech', {'text': response})
+                _trigger_auto_tts(response, app)
                 
             else:
                 app.logger.error("No response generated from AI for voice input")
@@ -155,5 +157,48 @@ def register_conversation_events(socketio, app):
         except Exception as e:
             app.logger.error(f"Error processing voice input as conversation: {e}", exc_info=True)
             emit('conversation_error', {'error': f'Voice conversation error: {str(e)}'})
+    
+    def _trigger_auto_tts(text, app):
+        """Trigger automatic TTS synthesis for AI responses."""
+        try:
+            app.logger.info(f"Auto-triggering TTS for: '{text[:50]}...'")
+            
+            # Import here to avoid circular imports
+            from services.voice_synthesis import my_processing_function_streaming
+            
+            # Start synthesis
+            emit('tts_starting', {'text': text[:50], 'status': 'Generating speech...'})
+            
+            chunk_count = 0
+            start_time = time.time()
+            
+            # Stream audio chunks from Cartesia with optimized timing
+            for audio_chunk in my_processing_function_streaming(text, app.logger):
+                chunk_count += 1
+                
+                app.logger.debug(f"Auto-TTS audio chunk {chunk_count}: {len(audio_chunk)} bytes")
+                
+                # Send only the list format for better performance (remove base64 overhead)
+                emit('audio_chunk', {
+                    'audio_chunk': list(audio_chunk),
+                    'chunk_type': 'tts_audio',
+                    'chunk_number': chunk_count,
+                    'timestamp': time.time() - start_time  # Add timing info for debugging
+                })
+                
+                # Add small server-side delay for consistent timing
+                time.sleep(0.001)  # 1ms delay to prevent overwhelming client
+            
+            total_time = time.time() - start_time
+            app.logger.info(f"Auto-TTS synthesis completed successfully. Sent {chunk_count} audio chunks in {total_time:.2f}s.")
+            emit('tts_finished', {
+                'status': 'Speech synthesis completed', 
+                'total_chunks': chunk_count,
+                'total_time': total_time
+            })
+                
+        except Exception as e:
+            app.logger.error(f"Error in auto-TTS synthesis: {e}", exc_info=True)
+            emit('tts_error', {'error': f'Auto-TTS synthesis error: {str(e)}'})
     
     return _process_transcribed_text_as_conversation 

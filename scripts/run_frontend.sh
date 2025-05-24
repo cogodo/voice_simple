@@ -56,4 +56,4 @@ echo "Starting Flutter app..."
 echo "======================================"
 
 # Run the app
-flutter run 
+flutter run -d chrome

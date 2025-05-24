@@ -39,4 +39,75 @@ Thumbs.db
 # Temporary files
 *.log
 temp/
-tmp/ 
+tmp/
+
+# Backend specific
+backend/temp_audio/
+backend/__pycache__/
+backend/*/__pycache__/
+backend/*/*/__pycache__/
+
+# Flutter/Dart specific
+# Files and directories created by pub
+.dart_tool/
+.packages
+build/
+pubspec.lock
+
+# Frontend Flutter build outputs
+frontend/build/
+frontend/.dart_tool/
+frontend/.packages
+frontend/pubspec.lock
+
+# IDE - Android Studio (Flutter)
+frontend/android/.gradle/
+frontend/android/captures/
+frontend/android/gradle/wrapper/gradle-wrapper.properties
+frontend/android/gradlew
+frontend/android/gradlew.bat
+frontend/android/local.properties
+frontend/android/**/GeneratedPluginRegistrant.java
+frontend/android/key.properties
+frontend/android/.gradle
+frontend/android/captures/
+frontend/android/local.properties
+frontend/android/**/gradle-wrapper.jar
+
+# IDE - iOS (Flutter)
+frontend/ios/.generated/
+frontend/ios/Flutter/Generated.xcconfig
+frontend/ios/Flutter/Flutter.framework
+frontend/ios/Flutter/Flutter.podspec
+frontend/ios/Runner/GeneratedPluginRegistrant.*
+frontend/ios/Pods/
+frontend/ios/.symlinks/
+frontend/ios/Flutter/flutter_export_environment.sh
+frontend/ios/ServiceDefinitions.json
+frontend/ios/Runner/GoogleService-Info.plist
+
+# Web
+frontend/web/
+
+# Symbolication related
+frontend/app.*.symbols
+
+# Obfuscation related
+frontend/app.*.map.json
+
+# Coverage
+frontend/coverage/
+
+# Flutter Version Management (FVM)
+frontend/.fvm/
+
+# Additional Flutter files
+frontend/lib/generated_plugin_registrant.dart
+
+# Deprecated files (migration artifacts - can be removed after cleanup)
+deprecated/
+
+# Generated audio files (development artifacts)
+generated_speech.wav
+*.wav
+*.mp3 

@@ -1,5 +1,5 @@
- name: voice_conversation_app
-description: Flutter voice conversation app with WebSocket streaming
+name: voice_conversation_app
+description: Flutter voice conversation app with OpenAI Whisper and Cartesia TTS
 
 version: 1.0.0+1
 
@@ -11,17 +11,18 @@ dependencies:
   flutter:
     sdk: flutter
   
-  # WebSocket and networking
-  web_socket_channel: ^2.4.0
-  dio: ^5.3.2
+  # WebSocket communication with Python backend
+  socket_io_client: ^2.0.3+1
   
-  # Audio streaming and playback
-  just_audio: ^0.9.34
-  audio_streams: ^0.2.0
+  # Audio recording and playback
+  record: ^5.0.4
+  audioplayers: ^5.2.1
   
-  # Speech recognition
-  speech_to_text: ^6.3.0
+  # Permissions
   permission_handler: ^11.0.1
+  
+  # HTTP requests
+  dio: ^5.3.2
   
   # UI and state management
   cupertino_icons: ^1.0.2
@@ -29,6 +30,8 @@ dependencies:
   
   # Utilities
   uuid: ^4.1.0
+  path_provider: ^2.1.1
+  convert: ^3.1.1
 
 dev_dependencies:
   flutter_test:

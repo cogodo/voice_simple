@@ -249,16 +249,25 @@ def my_processing_function_streaming(text: str, logger) -> Generator[bytes, None
                     try:
                         # Decode base64 audio data
                         import base64
-                        audio_bytes = base64.b64decode(item.data)
+                        audio_bytes_f32le = base64.b64decode(item.data)
                         
-                        if len(audio_bytes) > 0:
+                        if len(audio_bytes_f32le) > 0:
                             chunk_count += 1
-                            total_bytes += len(audio_bytes)
+                            total_bytes += len(audio_bytes_f32le)
                             
-                            # Split into consistent 1024-byte chunks
-                            for i in range(0, len(audio_bytes), 1024):
-                                chunk = audio_bytes[i:i + 1024]
-                                yield chunk
+                            # Convert float32 little-endian to int16 little-endian
+                            num_samples = len(audio_bytes_f32le) // 4
+                            audio_bytes_s16le = bytearray(num_samples * 2)
+                            
+                            for i in range(num_samples):
+                                float_val = struct.unpack_from('<f', audio_bytes_f32le, i * 4)[0]
+                                int_val = int(max(-1.0, min(1.0, float_val)) * 32767.0)
+                                struct.pack_into('<h', audio_bytes_s16le, i * 2, int_val)
+                            
+                            # Split into consistent 1024-byte chunks (int16 data)
+                            for i in range(0, len(audio_bytes_s16le), 1024):
+                                chunk = audio_bytes_s16le[i:i + 1024]
+                                yield bytes(chunk)
                                 
                                 # Add micro-delay for smooth streaming (23ms intervals)
                                 time.sleep(0.023)

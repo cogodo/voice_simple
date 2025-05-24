@@ -27,7 +27,13 @@ def create_app(config_name=None):
             app.logger.warning(f"CONFIG WARNING: {error}")
     
     # Initialize SocketIO
-    socketio = SocketIO(app, cors_allowed_origins="*")
+    socketio = SocketIO(
+        app, 
+        cors_allowed_origins="*",
+        logger=True,  # Enable logging for debugging
+        engineio_logger=True,  # Enable engine.io logging
+        async_mode='threading'  # Use threading mode for better web compatibility
+    )
     
     # Audio buffer storage for voice conversations
     # In production, use Redis or proper session storage

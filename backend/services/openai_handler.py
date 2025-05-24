@@ -3,6 +3,7 @@ import openai
 from openai import OpenAI
 import logging
 from typing import List, Dict, Generator
+from datetime import datetime
 
 class ConversationManager:
     """Handles OpenAI LLM interactions with conversation context."""
@@ -27,6 +28,10 @@ class ConversationManager:
         self.model = "gpt-4o-mini"  # Fast and cost-effective model
         self.max_tokens = 150  # Keep responses concise for voice
         self.temperature = 0.7  # Balanced creativity
+    
+    def get_current_timestamp(self) -> str:
+        """Get current timestamp as a formatted string."""
+        return datetime.now().isoformat()
     
     def add_user_message(self, text: str) -> None:
         """Add a user message to the conversation history."""

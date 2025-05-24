@@ -38,10 +38,31 @@ def my_processing_function(text):
         current_app.logger.error("CARTESIA_API_KEY not set in environment variables.")
         return "Error: CARTESIA_API_KEY environment variable not set. Please configure it."
 
-    client = Cartesia(api_key=api_key)
-    voice_id = "a0e99841-438c-4a64-b679-ae501e7d6091" 
-    transcript = text
-    sample_rate = 22050 
+    # Define sample_rate for Cartesia
+    sample_rate = 22050  # Sample rate for Cartesia
+
+    client = Cartesia(
+        api_key=os.getenv("CARTESIA_API_KEY"),
+    )
+    response = client.tts.sse(
+        model_id="sonic-2",
+        transcript="Hello world!",
+        voice={
+            "id": "f9836c6e-a0bd-460e-9d3c-f7299fa60f94",
+            "experimental_controls": {
+                "speed": "normal",
+                "emotion": [],
+            },
+        },
+        language="en",
+        output_format={
+            "container": "raw",
+            "encoding": "pcm_f32le",
+            "sample_rate": 44100,
+        },
+    )
+
+
 
     audio_chunks = []
     # Determine the hostname from the Cartesia client's expected base URL if possible
@@ -82,14 +103,20 @@ def my_processing_function(text):
         current_app.logger.info("Sending TTS request and processing stream...")
 
         for i, output_item in enumerate(ws.send(
-            model_id="sonic-2", 
-            transcript=transcript,
-            voice={"id": voice_id},
-            stream=True, 
+            model_id="sonic-english",
+            transcript=text,
+            voice={
+                "id": "a0e99841-438c-4a64-b679-ae501e7d6091",
+                "experimental_controls": {
+                    "speed": "normal",
+                    "emotion": [],
+                },
+            },
+            stream=True,
             output_format={
                 "container": "raw",
-                "encoding": "pcm_f32le", 
-                "sample_rate": sample_rate 
+                "encoding": "pcm_f32le",
+                "sample_rate": sample_rate
             },
         )):
             current_app.logger.info(f"Stream item {i}: type={type(output_item)}")
@@ -213,13 +240,19 @@ def my_processing_function_streaming(text, logger):
         raw_f32_buffer = bytearray() # Buffer for float32 samples from Cartesia
 
         for i, output_item in enumerate(ws.send(
-            model_id="sonic-2",
+            model_id="sonic-english",
             transcript=text,
-            voice={"id": voice_id},
+            voice={
+                "id": voice_id,
+                "experimental_controls": {
+                    "speed": "normal",
+                    "emotion": [],
+                },
+            },
             stream=True,
             output_format={
                 "container": "raw",
-                "encoding": "pcm_f32le", # Requesting float32
+                "encoding": "pcm_f32le",
                 "sample_rate": sample_rate
             },
         )):

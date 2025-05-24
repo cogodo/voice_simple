@@ -1,6 +1,7 @@
 """
 Text-to-Speech related WebSocket event handlers for the Voice Agent backend.
 """
+import base64
 from flask_socketio import emit
 from services.voice_synthesis import my_processing_function_streaming
 
@@ -12,7 +13,6 @@ def register_tts_events(socketio, app):
     def handle_synthesize_speech_streaming(data):
         """Handle streaming text-to-speech synthesis."""
         text = data.get('text', '').strip()
-        voice_id = data.get('voice_id', None)  # Optional voice selection
         
         app.logger.info(f"Synthesizing speech for text: '{text[:100]}...'")
         
@@ -22,30 +22,30 @@ def register_tts_events(socketio, app):
         
         try:
             # Start synthesis
-            emit('synthesis_started', {'status': 'Generating speech...'})
+            emit('tts_starting', {'text': text[:50], 'status': 'Generating speech...'})
+            
+            chunk_count = 0
             
             # Stream audio chunks from Cartesia
-            def audio_chunk_callback(chunk_data):
-                """Callback function to stream audio chunks to client."""
+            for audio_chunk in my_processing_function_streaming(text, app.logger):
+                chunk_count += 1
+                
+                # Convert audio chunk to base64 for transmission
+                audio_chunk_b64 = base64.b64encode(audio_chunk).decode('utf-8')
+                
+                app.logger.debug(f"Streaming audio chunk {chunk_count}: {len(audio_chunk)} bytes")
+                
+                # Emit audio chunk to client
                 emit('audio_chunk', {
-                    'chunk_data': chunk_data,
-                    'chunk_type': 'tts_audio'
+                    'audio_chunk': list(audio_chunk),  # Convert bytes to list for JSON
+                    'chunk_data': audio_chunk_b64,     # Base64 for easier handling
+                    'chunk_type': 'tts_audio',
+                    'chunk_number': chunk_count
                 })
             
-            # Call streaming synthesis with callback
-            success = my_processing_function_streaming(
-                text, 
-                audio_chunk_callback,
-                voice_id=voice_id
-            )
-            
-            if success:
-                app.logger.info("TTS synthesis completed successfully")
-                emit('synthesis_complete', {'status': 'Speech synthesis completed'})
-            else:
-                app.logger.error("TTS synthesis failed")
-                emit('synthesis_error', {'error': 'Speech synthesis failed'})
+            app.logger.info(f"TTS synthesis completed successfully. Sent {chunk_count} audio chunks.")
+            emit('tts_finished', {'status': 'Speech synthesis completed', 'total_chunks': chunk_count})
                 
         except Exception as e:
             app.logger.error(f"Error in speech synthesis: {e}", exc_info=True)
-            emit('synthesis_error', {'error': f'Synthesis error: {str(e)}'}) 
+            emit('tts_error', {'error': f'Synthesis error: {str(e)}'}) 

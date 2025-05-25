@@ -243,6 +243,14 @@ def my_processing_function_streaming(text: str, logger) -> Generator[bytes, None
         chunk_count = 0
         total_bytes = 0
         
+        # Buffer for accumulating partial frames
+        audio_buffer = bytearray()
+        
+        # Use correct frame size for 20ms frames at 22050Hz
+        # 20ms = 0.02s, 22050 samples/s * 0.02s = 441 samples
+        # 441 samples * 2 bytes/sample = 882 bytes per frame
+        FRAME_SIZE_BYTES = 441 * 2  # 882 bytes
+        
         for item in response:
             if hasattr(item, 'type') and item.type == 'chunk':
                 if hasattr(item, 'data') and isinstance(item.data, str):
@@ -264,18 +272,15 @@ def my_processing_function_streaming(text: str, logger) -> Generator[bytes, None
                                 int_val = int(max(-1.0, min(1.0, float_val)) * 32767.0)
                                 struct.pack_into('<h', audio_bytes_s16le, i * 2, int_val)
                             
-                            # Use correct frame size for 20ms frames at 22050Hz
-                            # 20ms = 0.02s, 22050 samples/s * 0.02s = 441 samples
-                            # 441 samples * 2 bytes/sample = 882 bytes per frame
-                            FRAME_SIZE_BYTES = 441 * 2  # 882 bytes
+                            # Add to buffer
+                            audio_buffer.extend(audio_bytes_s16le)
                             
-                            # Split into consistent frame-sized chunks
-                            for i in range(0, len(audio_bytes_s16le), FRAME_SIZE_BYTES):
-                                chunk = audio_bytes_s16le[i:i + FRAME_SIZE_BYTES]
-                                yield bytes(chunk)
-                                
-                                # Add micro-delay for smooth streaming (20ms intervals to match frame size)
-                                time.sleep(0.020)
+                            # Yield complete frames from buffer
+                            while len(audio_buffer) >= FRAME_SIZE_BYTES:
+                                frame = bytes(audio_buffer[:FRAME_SIZE_BYTES])
+                                audio_buffer = audio_buffer[FRAME_SIZE_BYTES:]
+                                yield frame
+                                # Remove the blocking sleep - let the client handle timing
                                 
                     except Exception as decode_error:
                         logger.error(f"Error decoding base64 audio data: {decode_error}")
@@ -284,6 +289,14 @@ def my_processing_function_streaming(text: str, logger) -> Generator[bytes, None
             elif hasattr(item, 'type') and item.type == 'done':
                 logger.info("Received done signal from Cartesia")
                 break
+        
+        # Yield any remaining partial frame (pad with silence if needed)
+        if len(audio_buffer) > 0:
+            # Pad with silence to complete the frame
+            remaining_bytes = FRAME_SIZE_BYTES - len(audio_buffer)
+            if remaining_bytes > 0:
+                audio_buffer.extend(b'\x00' * remaining_bytes)
+            yield bytes(audio_buffer)
         
         logger.info(f"TTS streaming completed: {chunk_count} audio chunks, {total_bytes} total bytes")
         

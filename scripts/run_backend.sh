@@ -27,7 +27,7 @@ echo "Installing dependencies..."
 pip install -r requirements.txt
 
 # Check for .env file
-if [ ! -f ".env" ]; then
+if [ ! -f "../.env" ]; then
     echo "⚠️  WARNING: No .env file found!"
     echo "Please create a .env file with your API keys:"
     echo "OPENAI_API_KEY=your_openai_key_here"

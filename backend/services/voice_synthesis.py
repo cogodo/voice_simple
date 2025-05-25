@@ -264,13 +264,18 @@ def my_processing_function_streaming(text: str, logger) -> Generator[bytes, None
                                 int_val = int(max(-1.0, min(1.0, float_val)) * 32767.0)
                                 struct.pack_into('<h', audio_bytes_s16le, i * 2, int_val)
                             
-                            # Split into consistent 1024-byte chunks (int16 data)
-                            for i in range(0, len(audio_bytes_s16le), 1024):
-                                chunk = audio_bytes_s16le[i:i + 1024]
+                            # Use correct frame size for 20ms frames at 22050Hz
+                            # 20ms = 0.02s, 22050 samples/s * 0.02s = 441 samples
+                            # 441 samples * 2 bytes/sample = 882 bytes per frame
+                            FRAME_SIZE_BYTES = 441 * 2  # 882 bytes
+                            
+                            # Split into consistent frame-sized chunks
+                            for i in range(0, len(audio_bytes_s16le), FRAME_SIZE_BYTES):
+                                chunk = audio_bytes_s16le[i:i + FRAME_SIZE_BYTES]
                                 yield bytes(chunk)
                                 
-                                # Add micro-delay for smooth streaming (23ms intervals)
-                                time.sleep(0.023)
+                                # Add micro-delay for smooth streaming (20ms intervals to match frame size)
+                                time.sleep(0.020)
                                 
                     except Exception as decode_error:
                         logger.error(f"Error decoding base64 audio data: {decode_error}")

@@ -15,32 +15,33 @@ def register_conversation_events(socketio, app):
     @socketio.on('connect')
     def handle_connect():
         nonlocal conversation_manager
-        app.logger.info('Client connected')
+        app.logger.info('=== CLIENT CONNECTED ===')
         
         # Initialize conversation manager for this session
         try:
+            app.logger.info("Attempting to create conversation manager...")
             conversation_manager = create_conversation_manager(app.logger)
             app.logger.info("Conversation manager initialized successfully")
             emit('conversation_ready', {'status': 'ready'})
         except Exception as e:
-            app.logger.error(f"Failed to initialize conversation manager: {e}")
+            app.logger.error(f"Failed to initialize conversation manager: {e}", exc_info=True)
             emit('conversation_error', {'error': 'Failed to initialize AI conversation system'})
 
     @socketio.on('disconnect')
     def handle_disconnect():
         app.logger.info('Client disconnected')
 
-    @socketio.on('conversation_text_input')
-    def handle_conversation_text_input(data):
-        """Handle text input for AI conversation."""
+    @socketio.on('user_message')
+    def handle_user_message(data):
+        """Handle user message from frontend chat."""
         nonlocal conversation_manager
         
         if not conversation_manager:
             emit('conversation_error', {'error': 'Conversation manager not initialized'})
             return
         
-        user_message = data.get('text', '').strip()
-        app.logger.info(f"Processing conversation input: '{user_message}'")
+        user_message = data.get('message', '').strip()
+        app.logger.info(f"Processing user message: '{user_message}'")
         
         if not user_message:
             emit('conversation_error', {'error': 'Empty message received'})
@@ -49,13 +50,6 @@ def register_conversation_events(socketio, app):
         try:
             # Add user message to conversation
             conversation_manager.add_user_message(user_message)
-            
-            # Emit user message to frontend
-            emit('user_message', {
-                'role': 'user',
-                'content': user_message,
-                'timestamp': conversation_manager.get_current_timestamp()
-            })
             
             # Show AI thinking status
             emit('ai_thinking', {'status': 'AI is thinking...'})
@@ -70,7 +64,71 @@ def register_conversation_events(socketio, app):
                 # Add AI response to conversation
                 conversation_manager.add_assistant_message(response)
                 
+                # Emit AI response back to frontend
+                emit('ai_response', {
+                    'message': response,
+                    'response': response,
+                    'role': 'assistant',
+                    'timestamp': conversation_manager.get_current_timestamp()
+                })
+                
+            else:
+                app.logger.error("No response generated from AI")
+                emit('conversation_error', {'error': 'Failed to generate AI response'})
+                
+        except Exception as e:
+            app.logger.error(f"Error in conversation: {e}", exc_info=True)
+            emit('conversation_error', {'error': f'Conversation error: {str(e)}'})
+
+    @socketio.on('conversation_text_input')
+    def handle_conversation_text_input(data):
+        """Handle text input for AI conversation."""
+        nonlocal conversation_manager
+        
+        app.logger.info(f"=== CONVERSATION_TEXT_INPUT HANDLER CALLED ===")
+        app.logger.info(f"Data received: {data}")
+        
+        if not conversation_manager:
+            app.logger.error("Conversation manager not initialized!")
+            emit('conversation_error', {'error': 'Conversation manager not initialized'})
+            return
+        
+        user_message = data.get('text', '').strip()
+        app.logger.info(f"Processing conversation input: '{user_message}'")
+        
+        if not user_message:
+            app.logger.error("Empty message received in conversation_text_input")
+            emit('conversation_error', {'error': 'Empty message received'})
+            return
+        
+        try:
+            app.logger.info("Adding user message to conversation...")
+            # Add user message to conversation
+            conversation_manager.add_user_message(user_message)
+            
+            # Emit user message to frontend
+            emit('user_message', {
+                'role': 'user',
+                'content': user_message,
+                'timestamp': conversation_manager.get_current_timestamp()
+            })
+            
+            # Show AI thinking status
+            app.logger.info("Emitting ai_thinking status...")
+            emit('ai_thinking', {'status': 'AI is thinking...'})
+            
+            # Generate AI response
+            app.logger.info("Generating AI response...")
+            response = conversation_manager.get_response(user_message)
+            
+            if response:
+                app.logger.info(f"AI response generated: '{response[:100]}...'")
+                
+                # Add AI response to conversation
+                conversation_manager.add_assistant_message(response)
+                
                 # Emit AI response
+                app.logger.info("Emitting ai_response_complete...")
                 emit('ai_response_complete', {
                     'response': response,
                     'role': 'assistant',
@@ -79,6 +137,7 @@ def register_conversation_events(socketio, app):
                 })
                 
                 # Automatically synthesize speech for the response
+                app.logger.info("Triggering auto-TTS...")
                 _trigger_auto_tts(response, app)
                 
             else:
@@ -166,35 +225,25 @@ def register_conversation_events(socketio, app):
             # Import here to avoid circular imports
             from services.voice_synthesis import my_processing_function_streaming
             
-            # Start synthesis
-            emit('tts_starting', {'text': text[:50], 'status': 'Generating speech...'})
+            # Start synthesis - use same format as TTS events
+            emit('tts_started', {'status': 'streaming'})
             
-            chunk_count = 0
-            start_time = time.time()
+            frame_count = 0
             
             # Stream audio chunks from Cartesia with optimized timing
             for audio_chunk in my_processing_function_streaming(text, app.logger):
-                chunk_count += 1
+                frame_count += 1
                 
-                app.logger.debug(f"Auto-TTS audio chunk {chunk_count}: {len(audio_chunk)} bytes")
+                app.logger.debug(f"Auto-TTS PCM frame {frame_count}: {len(audio_chunk)} bytes")
                 
-                # Send only the list format for better performance (remove base64 overhead)
-                emit('audio_chunk', {
-                    'audio_chunk': list(audio_chunk),
-                    'chunk_type': 'tts_audio',
-                    'chunk_number': chunk_count,
-                    'timestamp': time.time() - start_time  # Add timing info for debugging
-                })
+                # Use pcm_frame format to match TTS events handler
+                emit('pcm_frame', list(audio_chunk))
                 
-                # Add small server-side delay for consistent timing
-                time.sleep(0.001)  # 1ms delay to prevent overwhelming client
-            
-            total_time = time.time() - start_time
-            app.logger.info(f"Auto-TTS synthesis completed successfully. Sent {chunk_count} audio chunks in {total_time:.2f}s.")
-            emit('tts_finished', {
-                'status': 'Speech synthesis completed', 
-                'total_chunks': chunk_count,
-                'total_time': total_time
+            app.logger.info(f"Auto-TTS synthesis completed successfully. Sent {frame_count} PCM frames.")
+            emit('tts_completed', {
+                'status': 'completed', 
+                'frames_sent': frame_count,
+                'duration_ms': frame_count * 20
             })
                 
         except Exception as e:

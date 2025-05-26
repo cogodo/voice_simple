@@ -1,237 +1,255 @@
 """
-OpenAI Whisper API integration for speech-to-text conversion.
-Handles audio processing and transcription for Phase 3 voice-to-voice conversations.
+Whisper voice-to-text integration service for the Voice Agent backend.
 """
-
 import os
 import io
 import tempfile
-import openai
-from pydub import AudioSegment
 import logging
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
-
-# Configure logging
-logger = logging.getLogger(__name__)
-
-def convert_to_whisper_format(audio_data, input_format='webm'):
-    """
-    Convert audio data to format suitable for Whisper API.
-    
-    Args:
-        audio_data (bytes): Raw audio data
-        input_format (str): Input audio format (webm, wav, mp3, etc.)
-    
-    Returns:
-        bytes: Audio data in WAV format suitable for Whisper
-    """
-    try:
-        # Create AudioSegment from raw bytes
-        audio = AudioSegment.from_file(io.BytesIO(audio_data), format=input_format)
-        
-        # Convert to Whisper's preferred format: 16kHz mono
-        audio = audio.set_frame_rate(16000).set_channels(1)
-        
-        # Export to WAV format in memory
-        output_buffer = io.BytesIO()
-        audio.export(output_buffer, format="wav")
-        
-        logger.debug(f"Converted audio: {len(audio_data)} bytes -> {output_buffer.tell()} bytes (16kHz mono WAV)")
-        return output_buffer.getvalue()
-        
-    except Exception as e:
-        logger.error(f"Error converting audio format: {e}")
-        raise
+from typing import Optional, Iterator, Union
+from openai import OpenAI
+import wave
+from pydub import AudioSegment
+from flask import current_app
 
 
-def transcribe_audio(audio_data, conversation_context="", input_format='webm'):
-    """
-    Transcribe audio using OpenAI Whisper API.
+class WhisperHandler:
+    """Handles OpenAI Whisper voice-to-text transcription."""
     
-    Args:
-        audio_data (bytes): Raw audio data
-        conversation_context (str): Previous conversation context for better accuracy
-        input_format (str): Input audio format
-    
-    Returns:
-        dict: Transcription result with text and metadata
-    
-    Raises:
-        Exception: If transcription fails
-    """
-    if not audio_data:
-        raise ValueError("No audio data provided")
-    
-    # Check for OpenAI API key
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise ValueError("OPENAI_API_KEY environment variable not set")
-    
-    try:
-        # Convert audio to suitable format
-        processed_audio = convert_to_whisper_format(audio_data, input_format)
+    def __init__(self, logger=None):
+        """Initialize the Whisper handler."""
+        self.api_key = os.getenv("OPENAI_API_KEY")
+        if not self.api_key:
+            raise ValueError("OPENAI_API_KEY environment variable not set")
         
-        # Create temporary file for Whisper API
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
-            temp_file.write(processed_audio)
-            temp_file_path = temp_file.name
+        self.client = OpenAI(api_key=self.api_key)
+        self.logger = logger or logging.getLogger(__name__)
         
+        # Whisper configuration
+        self.model = "whisper-1"
+        self.language = "en"  # Can be made configurable
+        self.response_format = "text"  # or "json" for detailed response
+        
+        # Audio processing settings
+        self.target_sample_rate = 16000  # Whisper optimal sample rate
+        self.max_file_size = 25 * 1024 * 1024  # 25MB limit for Whisper API
+        self.supported_formats = ['wav', 'mp3', 'm4a', 'flac', 'ogg', 'webm']
+    
+    def transcribe_audio(self, audio_data: bytes, 
+                        audio_format: str = 'wav',
+                        language: Optional[str] = None) -> str:
+        """
+        Transcribe audio data using OpenAI Whisper.
+        
+        Args:
+            audio_data: Raw audio bytes
+            audio_format: Audio format (wav, mp3, etc.)
+            language: Language code (optional, auto-detect if None)
+            
+        Returns:
+            Transcribed text string
+            
+        Raises:
+            ValueError: If audio format is unsupported or data is invalid
+            Exception: If transcription fails
+        """
         try:
-            # Call Whisper API
-            with open(temp_file_path, "rb") as audio_file:
-                logger.info(f"Sending {len(processed_audio)} bytes to Whisper API")
-                
-                # Prepare Whisper API parameters
-                whisper_params = {
-                    "model": "whisper-1",
-                    "file": audio_file,
-                    "response_format": "verbose_json",  # Get confidence and timing info
-                    "temperature": 0.0  # Deterministic output
-                }
-                
-                # Add conversation context as prompt if available (max 224 chars)
-                if conversation_context:
-                    whisper_params["prompt"] = conversation_context[:224]
-                
-                # Make API call
-                client = openai.OpenAI(api_key=api_key)
-                transcript = client.audio.transcriptions.create(**whisper_params)
-                
-                result = {
-                    "text": transcript.text.strip(),
-                    "duration": getattr(transcript, 'duration', None),
-                    "language": getattr(transcript, 'language', 'en'),
-                    "confidence": getattr(transcript, 'confidence', None)
-                }
-                
-                logger.info(f"Transcription successful: '{result['text'][:100]}...'")
-                return result
-                
-        finally:
-            # Clean up temporary file
+            self.logger.info(f"Starting transcription of {len(audio_data)} bytes ({audio_format})")
+            
+            # Validate input
+            if not audio_data:
+                raise ValueError("Empty audio data provided")
+            
+            if audio_format.lower() not in self.supported_formats:
+                raise ValueError(f"Unsupported audio format: {audio_format}")
+            
+            if len(audio_data) > self.max_file_size:
+                raise ValueError(f"Audio file too large: {len(audio_data)} bytes (max: {self.max_file_size})")
+            
+            # Process audio if needed
+            processed_audio = self._preprocess_audio(audio_data, audio_format)
+            
+            # Create temporary file for Whisper API
+            with tempfile.NamedTemporaryFile(suffix=f'.{audio_format}', delete=False) as temp_file:
+                temp_file.write(processed_audio)
+                temp_file_path = temp_file.name
+            
             try:
-                os.unlink(temp_file_path)
-            except OSError:
-                logger.warning(f"Could not delete temporary file: {temp_file_path}")
+                # Transcribe using OpenAI Whisper
+                with open(temp_file_path, 'rb') as audio_file:
+                    transcript = self.client.audio.transcriptions.create(
+                        model=self.model,
+                        file=audio_file,
+                        language=language or self.language,
+                        response_format=self.response_format
+                    )
+                
+                # Extract text from response
+                if isinstance(transcript, str):
+                    transcribed_text = transcript
+                else:
+                    transcribed_text = transcript.text if hasattr(transcript, 'text') else str(transcript)
+                
+                self.logger.info(f"Transcription successful: '{transcribed_text[:100]}...'")
+                return transcribed_text.strip()
+                
+            finally:
+                # Clean up temporary file
+                try:
+                    os.unlink(temp_file_path)
+                except OSError:
+                    pass
+                    
+        except Exception as e:
+            self.logger.error(f"Transcription failed: {e}", exc_info=True)
+            raise
     
-    except Exception as e:
-        logger.error(f"Error during transcription: {e}", exc_info=True)
+    def transcribe_audio_chunks(self, audio_chunks: Iterator[bytes],
+                               audio_format: str = 'wav') -> Iterator[str]:
+        """
+        Transcribe audio chunks for streaming/real-time processing.
+        
+        Args:
+            audio_chunks: Iterator of audio byte chunks
+            audio_format: Audio format
+            
+        Yields:
+            Transcribed text for each chunk
+        """
+        chunk_count = 0
+        
+        for chunk in audio_chunks:
+            try:
+                chunk_count += 1
+                self.logger.debug(f"Processing audio chunk {chunk_count}: {len(chunk)} bytes")
+                
+                if len(chunk) < 1024:  # Skip very small chunks
+                    self.logger.debug(f"Skipping small chunk {chunk_count}")
+                    continue
+                
+                transcription = self.transcribe_audio(chunk, audio_format)
+                
+                if transcription:
+                    self.logger.info(f"Chunk {chunk_count} transcription: '{transcription}'")
+                    yield transcription
+                    
+            except Exception as e:
+                self.logger.error(f"Error processing chunk {chunk_count}: {e}")
+                # Continue with next chunk instead of failing completely
+                continue
+    
+    def _preprocess_audio(self, audio_data: bytes, audio_format: str) -> bytes:
+        """
+        Preprocess audio for optimal Whisper performance.
+        
+        Args:
+            audio_data: Raw audio bytes
+            audio_format: Audio format
+            
+        Returns:
+            Processed audio bytes
+        """
+        try:
+            # Load audio using pydub
+            audio = AudioSegment.from_file(io.BytesIO(audio_data), format=audio_format)
+            
+            # Convert to optimal format for Whisper
+            # - Mono channel
+            # - 16kHz sample rate
+            # - WAV format
+            if audio.channels > 1:
+                audio = audio.set_channels(1)
+                self.logger.debug("Converted to mono")
+            
+            if audio.frame_rate != self.target_sample_rate:
+                audio = audio.set_frame_rate(self.target_sample_rate)
+                self.logger.debug(f"Resampled to {self.target_sample_rate}Hz")
+            
+            # Export as WAV
+            output_buffer = io.BytesIO()
+            audio.export(output_buffer, format="wav")
+            processed_data = output_buffer.getvalue()
+            
+            self.logger.debug(f"Preprocessed audio: {len(audio_data)} -> {len(processed_data)} bytes")
+            return processed_data
+            
+        except Exception as e:
+            self.logger.warning(f"Audio preprocessing failed, using original: {e}")
+            return audio_data
+    
+    def validate_audio_format(self, audio_data: bytes) -> bool:
+        """
+        Validate if audio data is in a supported format.
+        
+        Args:
+            audio_data: Raw audio bytes
+            
+        Returns:
+            True if format is valid and supported
+        """
+        try:
+            # Try to load with pydub to validate format
+            AudioSegment.from_file(io.BytesIO(audio_data))
+            return True
+        except Exception as e:
+            self.logger.debug(f"Audio format validation failed: {e}")
+            return False
+    
+    def get_audio_info(self, audio_data: bytes, audio_format: str) -> dict:
+        """
+        Get information about audio data.
+        
+        Args:
+            audio_data: Raw audio bytes
+            audio_format: Audio format
+            
+        Returns:
+            Dictionary with audio information
+        """
+        try:
+            audio = AudioSegment.from_file(io.BytesIO(audio_data), format=audio_format)
+            
+            return {
+                'duration_seconds': len(audio) / 1000.0,
+                'sample_rate': audio.frame_rate,
+                'channels': audio.channels,
+                'frame_count': audio.frame_count(),
+                'size_bytes': len(audio_data),
+                'format': audio_format
+            }
+        except Exception as e:
+            self.logger.error(f"Failed to get audio info: {e}")
+            return {'error': str(e)}
+
+
+# Factory function for easy instantiation
+def create_whisper_handler(logger=None) -> WhisperHandler:
+    """Create a WhisperHandler instance with error handling."""
+    try:
+        return WhisperHandler(logger)
+    except ValueError as e:
+        if logger:
+            logger.error(f"Failed to create WhisperHandler: {e}")
         raise
 
 
-def is_audio_valid(audio_data, min_duration_ms=100):
-    """
-    Validate if audio data is suitable for transcription.
+# For standalone testing
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
+    logger = logging.getLogger(__name__)
     
-    Args:
-        audio_data (bytes): Raw audio data
-        min_duration_ms (int): Minimum duration in milliseconds
-    
-    Returns:
-        bool: True if audio is valid for transcription
-    """
     try:
-        if not audio_data or len(audio_data) < 1000:  # Less than 1KB
-            return False
+        # Test the whisper handler
+        handler = create_whisper_handler(logger)
         
-        # Check audio duration
-        audio = AudioSegment.from_file(io.BytesIO(audio_data), format='webm')
-        if len(audio) < min_duration_ms:
-            logger.debug(f"Audio too short: {len(audio)}ms < {min_duration_ms}ms")
-            return False
+        # Test with a simple WAV file (you would need to provide actual audio data)
+        logger.info("WhisperHandler created successfully")
+        logger.info("To test transcription, provide actual audio data")
         
-        # Check for silence (very basic check)
-        if audio.max_possible_amplitude > 0:
-            # Calculate RMS (root mean square) for volume check
-            rms = audio.rms
-            if rms < 100:  # Very quiet audio
-                logger.debug(f"Audio too quiet: RMS={rms}")
-                return False
-        
-        return True
+        # Example of how to use:
+        # with open('test_audio.wav', 'rb') as f:
+        #     audio_data = f.read()
+        #     transcription = handler.transcribe_audio(audio_data, 'wav')
+        #     print(f"Transcription: {transcription}")
         
     except Exception as e:
-        logger.error(f"Error validating audio: {e}")
-        return False
-
-
-async def transcribe_audio_async(audio_data, conversation_context="", input_format='webm'):
-    """
-    Async wrapper for transcribe_audio function.
-    
-    Args:
-        audio_data (bytes): Raw audio data
-        conversation_context (str): Previous conversation context
-        input_format (str): Input audio format
-    
-    Returns:
-        dict: Transcription result
-    """
-    import asyncio
-    import functools
-    
-    # Run the synchronous function in a thread pool
-    loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(
-        None, 
-        functools.partial(
-            transcribe_audio, 
-            audio_data, 
-            conversation_context, 
-            input_format
-        )
-    )
-    return result
-
-
-def get_conversation_context(conversation_history, max_length=200):
-    """
-    Extract relevant context from conversation history for Whisper prompt.
-    
-    Args:
-        conversation_history (list): List of previous messages
-        max_length (int): Maximum context length in characters
-    
-    Returns:
-        str: Context string for Whisper prompt
-    """
-    if not conversation_history:
-        return ""
-    
-    # Get last few messages
-    recent_messages = conversation_history[-3:]  # Last 3 messages
-    context_parts = []
-    
-    for msg in recent_messages:
-        if isinstance(msg, dict):
-            content = msg.get('content', '')
-            role = msg.get('role', '')
-            if content and role in ['user', 'assistant']:
-                context_parts.append(f"{role}: {content[:50]}")
-    
-    context = " ".join(context_parts)
-    return context[:max_length] if len(context) > max_length else context
-
-
-# Test function for development
-def test_whisper_integration():
-    """Test function to verify Whisper integration works."""
-    print("Testing Whisper integration...")
-    
-    # Check API key
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        print("❌ OPENAI_API_KEY not found")
-        return False
-    
-    print("✅ OpenAI API key found")
-    print("✅ Whisper handler module ready")
-    return True
-
-
-if __name__ == "__main__":
-    # Run test when script is executed directly
-    test_whisper_integration() 
+        logger.error(f"Error in standalone test: {e}", exc_info=True) 

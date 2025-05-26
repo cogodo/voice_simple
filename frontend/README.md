@@ -1,6 +1,6 @@
- # Flutter Voice Conversation App
+# 🎤 Voice AI Conversation App
 
-A Flutter app that connects to your existing Python Flask-SocketIO backend for real-time voice conversations with AI.
+A Flutter app with **prominent voice input functionality** for natural AI conversations.
 
 ## 🎯 What This App Does
 
@@ -183,3 +183,55 @@ If you encounter issues:
 4. **Test Connection**: Try with `curl` or Postman to your backend
 
 The app is designed to work exactly like your current web interface but with better mobile performance!
+
+## ✨ Voice Features
+
+### 🎯 **Primary Voice Input**
+- **Large, prominent voice button** in the main interface
+- **Real-time audio level visualization** while recording
+- **Visual recording indicator** with duration and waveform
+- **Automatic transcription** using OpenAI Whisper
+- **Seamless conversation flow** from voice to AI response
+
+### 🔊 **Audio Output**
+- **Streaming TTS** with Cartesia for natural AI responses
+- **Real-time audio playback** with minimal latency
+- **Visual feedback** during audio streaming
+
+## 🚀 How to Use Voice Input
+
+1. **Start the app** - Voice input is prominently displayed at the bottom
+2. **Tap the large microphone button** to start recording
+3. **Speak your message** - See real-time audio levels and duration
+4. **Tap again to stop** or hold to cancel
+5. **Watch automatic transcription** and AI response
+
+## 🎨 Visual Indicators
+
+- **🎤 Voice Input Section**: Highlighted blue container with large mic button
+- **📊 Recording Indicator**: Shows audio levels, duration, and transcription status
+- **💬 Voice Messages**: Marked with mic icon in chat history
+- **🔄 Processing Status**: Visual feedback during transcription and AI thinking
+
+## 🛠 Technical Features
+
+- **WebSocket real-time communication**
+- **OpenAI Whisper transcription**
+- **Cartesia TTS streaming**
+- **Flutter Web Audio API integration**
+- **Comprehensive error handling**
+
+## 📱 Interface Layout
+
+```
+🎤 Voice AI Conversation
+├── Connection Status Bar
+├── Voice Recording Indicator (when active)
+├── Chat Messages
+├── 🎤 VOICE INPUT (Primary - Blue highlighted)
+│   └── Large microphone button with animations
+├── ── OR ── (Divider)
+└── Text Input (Secondary option)
+```
+
+The voice functionality is designed to be the **primary input method**, making it obvious and easy to use!

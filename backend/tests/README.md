@@ -4,6 +4,20 @@ This directory contains all test files and debugging tools for the Voice Agent b
 
 ## Test Files
 
+### 💬 **Chat & Conversation Tests**
+
+- **`test_chat_integration.py`** - ChatGPT integration test
+  - Tests OpenAI ChatGPT integration via WebSocket
+  - Validates conversation flow and response handling
+  - Run: `python test_chat_integration.py --standalone` (manual test)
+  - Run: `python -m unittest tests.test_chat_integration` (unit tests)
+
+- **`test_whisper_integration.py`** - Whisper voice-to-text test
+  - Tests OpenAI Whisper integration for speech transcription
+  - Validates audio processing and transcription pipeline
+  - Run: `python test_whisper_integration.py --standalone` (manual test)
+  - Run: `python -m unittest tests.test_whisper_integration` (unit tests)
+
 ### 🎤 **TTS (Text-to-Speech) Tests**
 
 - **`test_streaming.py`** - Direct test of the TTS streaming function
@@ -60,6 +74,12 @@ python app.py
 
 ### Quick Test Commands
 ```bash
+# Test ChatGPT integration
+python tests/test_chat_integration.py --standalone
+
+# Test Whisper voice-to-text integration
+python tests/test_whisper_integration.py --standalone
+
 # Test TTS streaming function directly
 python tests/test_streaming.py
 
@@ -71,6 +91,15 @@ python tests/test_cartesia_direct.py
 
 # Browser-based test (server must be running)
 # Open: http://localhost:8000/test
+```
+
+### Unit Test Commands
+```bash
+# Run all chat integration unit tests
+python -m unittest tests.test_chat_integration
+
+# Run specific test
+python -m unittest tests.test_chat_integration.TestChatIntegration.test_chat_integration
 ```
 
 ### Debug Commands
@@ -94,6 +123,7 @@ python tests/[test_file].py
 
 ## Expected Results
 
+- **Chat Integration**: Should receive intelligent responses from ChatGPT
 - **TTS Streaming**: Should receive 100+ audio chunks (~140 typical)
 - **Socket.IO**: Should connect and receive audio events
 - **Cartesia API**: Should return base64-encoded audio data
@@ -104,4 +134,5 @@ python tests/[test_file].py
 - **Connection Issues**: Check if backend server is running on port 8000
 - **API Issues**: Verify `CARTESIA_API_KEY` and `OPENAI_API_KEY` are set
 - **Audio Issues**: Check `debug_audio_timing.py` for timing problems
-- **Browser Issues**: Use Chrome/Firefox, check console for WebSocket errors 
+- **Browser Issues**: Use Chrome/Firefox, check console for WebSocket errors
+- **Chat Issues**: Verify OpenAI API key is valid and has sufficient credits 

@@ -218,32 +218,80 @@ def register_conversation_events(socketio, app):
             emit('conversation_error', {'error': f'Voice conversation error: {str(e)}'})
     
     def _trigger_auto_tts(text, app):
-        """Trigger automatic TTS synthesis for AI responses."""
+        """Trigger automatic TTS synthesis for AI responses with proper timing."""
         try:
-            app.logger.info(f"Auto-triggering TTS for: '{text[:50]}...'")
+            app.logger.info(f"Auto-triggering TTS with timing control for: '{text[:50]}...'")
             
             # Import here to avoid circular imports
             from services.voice_synthesis import my_processing_function_streaming
+            import time
             
             # Start synthesis - use same format as TTS events
             emit('tts_started', {'status': 'streaming'})
             
-            frame_count = 0
+            # Pre-collect all frames for timing control
+            app.logger.info("Pre-collecting frames for auto-TTS timing control...")
+            audio_frames = []
             
-            # Stream audio chunks from Cartesia with optimized timing
-            for audio_chunk in my_processing_function_streaming(text, app.logger):
-                frame_count += 1
+            try:
+                for audio_chunk in my_processing_function_streaming(text, app.logger):
+                    audio_frames.append(audio_chunk)
                 
-                app.logger.debug(f"Auto-TTS PCM frame {frame_count}: {len(audio_chunk)} bytes")
+                app.logger.info(f"Auto-TTS collected {len(audio_frames)} frames for timed streaming")
                 
-                # Use pcm_frame format to match TTS events handler
+            except Exception as e:
+                app.logger.error(f"Error collecting auto-TTS frames: {e}")
+                emit('tts_error', {'error': f'Auto-TTS frame collection failed: {str(e)}'})
+                return
+            
+            if not audio_frames:
+                app.logger.warning("No audio frames collected for auto-TTS")
+                emit('tts_error', {'error': 'No audio generated for auto-TTS'})
+                return
+            
+            # Stream frames with real-time timing (20ms per frame)
+            FRAME_DURATION_MS = 20
+            start_time = time.time()
+            
+            app.logger.info(f"Starting auto-TTS real-time streaming: {len(audio_frames)} frames")
+            
+            for frame_index, audio_chunk in enumerate(audio_frames):
+                # Calculate when this frame should be sent
+                expected_time = start_time + (frame_index * FRAME_DURATION_MS / 1000.0)
+                current_time = time.time()
+                
+                # Wait if we're ahead of schedule
+                if current_time < expected_time:
+                    sleep_time = expected_time - current_time
+                    time.sleep(sleep_time)
+                
+                # Send frame with timing info
                 emit('pcm_frame', list(audio_chunk))
                 
-            app.logger.info(f"Auto-TTS synthesis completed successfully. Sent {frame_count} PCM frames.")
+                # Log progress occasionally
+                if (frame_index + 1) % 50 == 0:
+                    elapsed_time = time.time() - start_time
+                    expected_elapsed = (frame_index + 1) * FRAME_DURATION_MS / 1000.0
+                    timing_drift = elapsed_time - expected_elapsed
+                    app.logger.debug(
+                        f"Auto-TTS: Sent {frame_index + 1} frames, "
+                        f"elapsed: {elapsed_time:.2f}s, drift: {timing_drift:.3f}s"
+                    )
+            
+            # Calculate final timing metrics
+            frames_sent = len(audio_frames)
+            total_duration_ms = frames_sent * FRAME_DURATION_MS
+            actual_duration = time.time() - start_time
+            
+            app.logger.info(f"Auto-TTS synthesis completed successfully. Sent {frames_sent} frames in {actual_duration:.2f}s (expected: {total_duration_ms/1000:.2f}s)")
+            
             emit('tts_completed', {
                 'status': 'completed', 
-                'frames_sent': frame_count,
-                'duration_ms': frame_count * 20
+                'frames_sent': frames_sent,
+                'duration_ms': total_duration_ms,
+                'actual_duration_ms': int(actual_duration * 1000),
+                'timing_accuracy': f"{((total_duration_ms/1000) / actual_duration * 100):.1f}%",
+                'source': 'auto_tts'
             })
                 
         except Exception as e:

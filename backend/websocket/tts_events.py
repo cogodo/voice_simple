@@ -54,9 +54,9 @@ def register_tts_events(socketio, app):
             emit('tts_error', {'error': str(e)})
 
     def stream_tts_pcm_timed(text, session_id, socketio_instance, app_instance, stream_tracker):
-        """Stream TTS audio as raw PCM frames with proper timing."""
+        """Stream TTS audio as raw PCM frames in real-time."""
         try:
-            app_instance.logger.info(f"Starting PCM-based TTS streaming with timing control for session {session_id}")
+            app_instance.logger.info(f"Starting real-time PCM TTS streaming for session {session_id}")
             
             # Signal start of streaming to specific client
             socketio_instance.emit('tts_started', {'status': 'streaming'}, room=session_id)
@@ -64,83 +64,56 @@ def register_tts_events(socketio, app):
             stream_state = stream_tracker[session_id]
             stream_state['start_time'] = time.time()
             
-            # Pre-collect all frames to enable proper timing
-            app_instance.logger.info("Pre-collecting audio frames for timing control...")
-            audio_frames = []
+            # Stream frames in real-time as they're generated
+            app_instance.logger.info("Starting real-time audio frame streaming...")
+            frame_count = 0
             
             try:
                 for frame_data in my_processing_function_streaming(text, app_instance.logger):
+                    # Check if stream should stop
                     if stream_state['should_stop']:
-                        app_instance.logger.info(f"Stream stopped during collection for session {session_id}")
-                        return
-                    audio_frames.append(frame_data)
-                
-                app_instance.logger.info(f"Collected {len(audio_frames)} frames for timed streaming")
+                        app_instance.logger.info(f"Stream stopped at frame {frame_count} for session {session_id}")
+                        break
+                    
+                    # Send frame immediately as it's generated
+                    socketio_instance.emit('pcm_frame', list(frame_data), room=session_id)
+                    frame_count += 1
+                    stream_state['frames_sent'] = frame_count
+                    
+                    # Log progress occasionally (every 1 second worth of frames = 50 frames)
+                    if frame_count % 50 == 0:
+                        elapsed_time = time.time() - stream_state['start_time']
+                        app_instance.logger.info(
+                            f"Session {session_id}: Real-time streamed {frame_count} frames in {elapsed_time:.2f}s"
+                        )
+                    
+                    # Add adaptive pacing based on client feedback
+                    delay = get_adaptive_delay(session_id, stream_tracker)
+                    time.sleep(delay)
                 
             except Exception as e:
-                app_instance.logger.error(f"Error collecting frames: {e}")
-                socketio_instance.emit('tts_error', {'error': f'Frame collection failed: {str(e)}'}, room=session_id)
+                app_instance.logger.error(f"Error during real-time streaming: {e}")
+                socketio_instance.emit('tts_error', {'error': f'Real-time streaming failed: {str(e)}'}, room=session_id)
                 return
-            
-            if not audio_frames:
-                app_instance.logger.warning("No audio frames collected")
-                socketio_instance.emit('tts_error', {'error': 'No audio generated'}, room=session_id)
-                return
-            
-            # Stream frames with real-time timing
-            app_instance.logger.info(f"Starting real-time frame streaming: {len(audio_frames)} frames at {FRAME_DURATION_MS}ms intervals")
-            
-            for frame_index, frame_data in enumerate(audio_frames):
-                # Check if stream should stop
-                if stream_state['should_stop']:
-                    app_instance.logger.info(f"Stream stopped at frame {frame_index} for session {session_id}")
-                    break
-                
-                # Calculate when this frame should be sent
-                expected_time = stream_state['start_time'] + (frame_index * FRAME_DURATION_MS / 1000.0)
-                current_time = time.time()
-                
-                # Wait if we're ahead of schedule
-                if current_time < expected_time:
-                    sleep_time = expected_time - current_time
-                    time.sleep(sleep_time)
-                
-                # Send frame to specific client
-                socketio_instance.emit('pcm_frame', list(frame_data), room=session_id)
-                stream_state['frames_sent'] = frame_index + 1
-                
-                # Log progress occasionally (every 1 second = 50 frames)
-                if (frame_index + 1) % 50 == 0:
-                    elapsed_time = time.time() - stream_state['start_time']
-                    expected_elapsed = (frame_index + 1) * FRAME_DURATION_MS / 1000.0
-                    timing_drift = elapsed_time - expected_elapsed
-                    app_instance.logger.debug(
-                        f"Session {session_id}: Sent {frame_index + 1} frames, "
-                        f"elapsed: {elapsed_time:.2f}s, drift: {timing_drift:.3f}s"
-                    )
             
             # Stream completed successfully
-            frames_sent = stream_state['frames_sent']
-            total_duration_ms = frames_sent * FRAME_DURATION_MS
             actual_duration = time.time() - stream_state['start_time']
             
             # Signal completion to specific client
             socketio_instance.emit('tts_completed', {
                 'status': 'completed',
-                'frames_sent': frames_sent,
-                'duration_ms': total_duration_ms,
+                'frames_sent': frame_count,
                 'actual_duration_ms': int(actual_duration * 1000),
-                'timing_accuracy': f"{((total_duration_ms/1000) / actual_duration * 100):.1f}%"
+                'message': f'Real-time streamed {frame_count} frames in {actual_duration:.2f}s'
             }, room=session_id)
             
             app_instance.logger.info(
-                f"TTS streaming completed for session {session_id}: "
-                f"{frames_sent} frames, {total_duration_ms}ms duration, "
-                f"{actual_duration:.2f}s actual time"
+                f"Real-time TTS streaming completed for session {session_id}: "
+                f"{frame_count} frames in {actual_duration:.2f}s"
             )
             
         except Exception as e:
-            app_instance.logger.error(f"Error in TTS streaming for session {session_id}: {e}", exc_info=True)
+            app_instance.logger.error(f"Error in real-time TTS streaming for session {session_id}: {e}", exc_info=True)
             # Send error to specific client
             socketio_instance.emit('tts_error', {'error': str(e)}, room=session_id)
         
@@ -171,4 +144,37 @@ def register_tts_events(socketio, app):
         """Handle heartbeat from client."""
         session_id = request.sid
         app.logger.debug(f"Received heartbeat from client {session_id}, data: {data}")
-        emit('server_heartbeat_ack', {'timestamp': data.get('timestamp')}, room=session_id) 
+        emit('server_heartbeat_ack', {'timestamp': data.get('timestamp')}, room=session_id)
+
+    @socketio.on('audio_buffer_status')
+    def handle_audio_buffer_status(data):
+        """Handle audio buffer status feedback from client."""
+        try:
+            session_id = request.sid
+            buffer_size = data.get('buffer_size', 0)
+            underrun_count = data.get('underrun_count', 0)
+            
+            app.logger.debug(f"Client {session_id} buffer status: {buffer_size}ms, underruns: {underrun_count}")
+            
+            # Store client status for adaptive pacing
+            if session_id in active_streams:
+                active_streams[session_id]['client_buffer_size'] = buffer_size
+                active_streams[session_id]['client_underrun_count'] = underrun_count
+                
+        except Exception as e:
+            app.logger.error(f"Error handling audio buffer status: {e}")
+    
+    def get_adaptive_delay(session_id, stream_tracker):
+        """Calculate adaptive delay based on client feedback."""
+        if session_id not in stream_tracker:
+            return 0.016  # Default 16ms (compensated for ~4ms processing overhead)
+            
+        client_buffer = stream_tracker[session_id].get('client_buffer_size', 60)
+        
+        # Adaptive pacing based on client buffer status (compensated for overhead)
+        if client_buffer > 100:  # Client has large buffer - can send faster
+            return 0.014  # 14ms - slightly faster
+        elif client_buffer < 40:  # Client buffer low - slow down
+            return 0.020  # 20ms - slower to let client catch up
+        else:
+            return 0.016  # Standard 16ms (compensated) 

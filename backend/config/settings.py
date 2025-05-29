@@ -55,7 +55,7 @@ class Config:
     MAX_CONVERSATION_HISTORY = int(os.getenv("MAX_CONVERSATION_HISTORY", "10"))
     
     # Voice synthesis settings
-    DEFAULT_VOICE_ID = os.getenv("DEFAULT_VOICE_ID", "79a125e8-cd45-4c13-8a67-188112f4dd22")
+    DEFAULT_VOICE_ID = os.getenv("DEFAULT_VOICE_ID", "b7d50908-b17c-442d-ad8d-810c63997ed9")
     VOICE_SPEED = float(os.getenv("VOICE_SPEED", "1.0"))
     VOICE_EMOTION = os.getenv("VOICE_EMOTION", "neutral")
     

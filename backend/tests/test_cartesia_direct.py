@@ -35,7 +35,7 @@ def test_cartesia_direct():
             transcript=text,
             voice={
                 "mode": "id",
-                "id": "a0e99841-438c-4a64-b679-ae501e7d6091"
+                "id": "b7d50908-b17c-442d-ad8d-810c63997ed9"
             },
             output_format={
                 "container": "raw",

@@ -108,7 +108,7 @@ def my_processing_function(text):
             model_id="sonic-english",
             transcript=text,
             voice={
-                "id": "a0e99841-438c-4a64-b679-ae501e7d6091",
+                "id": "b7d50908-b17c-442d-ad8d-810c63997ed9",
                 "experimental_controls": {
                     "speed": "normal",
                     "emotion": [],
@@ -229,7 +229,7 @@ def my_processing_function_streaming(text: str, logger) -> Generator[bytes, None
             transcript=text,
             voice={
                 "mode": "id",
-                "id": "a0e99841-438c-4a64-b679-ae501e7d6091"
+                "id": "b7d50908-b17c-442d-ad8d-810c63997ed9"
             },
             output_format={
                 "container": "raw",

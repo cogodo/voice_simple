@@ -1,0 +1,62 @@
+{
+  "test_info": {
+    "text": "Hello world, this is a test of the audio quality system.",
+    "sample_rate": 22050,
+    "timestamp": "2025-01-20T10:00:00Z"
+  },
+  "cartesia_analysis": {
+    "cartesia_analysis": {
+      "total_chunks": 30,
+      "total_samples": 65649,
+      "chunk_sizes": {
+        "min": 572,
+        "max": 9216,
+        "avg": 8753.2
+      }
+    },
+    "audio_levels": {
+      "peak_level": 0.5197324156761169,
+      "peak_level_db": -5.6844039082903475,
+      "min_level": 1.1040155811770092e-07,
+      "avg_level": 0.06470200429427235,
+      "avg_level_db": -23.78164531693193,
+      "rms_level": 0.0975421363492977,
+      "rms_level_db": -20.21615473610475,
+      "dynamic_range_db": 133.45609203740682
+    },
+    "quality_analysis": {
+      "peak_percentage": 0.006093009794513245,
+      "clipping_percentage": 0.0,
+      "volume_distribution": {
+        "quiet_samples": 37715,
+        "medium_samples": 26157,
+        "loud_samples": 1717,
+        "very_loud_samples": 60
+      }
+    },
+    "recommendations": {
+      "peak_gain": 1.5392536156500545,
+      "rms_gain": 2.0503959364166624,
+      "recommended_gain": 1.5392536156500545,
+      "recommended_gain_db": 3.746203648129219,
+      "issues": []
+    }
+  },
+  "backend_analysis": {
+    "name": "Backend IIR Output",
+    "total_samples": 63504,
+    "duration_seconds": 2.88,
+    "peak_level": 0.940216064453125,
+    "peak_db": -0.5354466553028049,
+    "rms_level": 0.16164670659581598,
+    "rms_db": -15.828662786323394,
+    "clipping_samples": 0,
+    "clipping_percentage": 0.0
+  },
+  "artifacts_detected": [
+    "Possible over-smoothing: very low high-frequency content"
+  ],
+  "recommendations": [
+    "Reduce IIR filter alpha (increase from 0.35 to 0.5+) for more audio clarity"
+  ]
+}

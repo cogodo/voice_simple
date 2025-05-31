@@ -10,6 +10,7 @@ from urllib.parse import urlparse # For extracting hostname from URL
 import logging # For standalone __main__ testing
 from typing import Generator
 import time
+import math
 
 # Basic logging config for when __main__ is run, Flask will have its own config
 if __name__ == '__main__':
@@ -169,12 +170,58 @@ def my_processing_function(text):
     # Convert float32 little-endian to int16 little-endian
     current_app.logger.info("Converting float32 audio to int16...")
     num_samples = len(full_audio_bytes_f32le) // 4
-    full_audio_bytes_s16le = bytearray(num_samples * 2)
+    
+    # First pass: analyze audio levels for optimal gain
+    current_app.logger.info("🔍 Analyzing audio levels for optimal gain...")
+    all_float_samples = []
+    
     for i in range(num_samples):
         float_val = struct.unpack_from('<f', full_audio_bytes_f32le, i * 4)[0]
-        int_val = int(max(-1.0, min(1.0, float_val)) * 32767.0)
+        all_float_samples.append(abs(float_val))
+    
+    if all_float_samples:
+        max_level = max(all_float_samples)
+        avg_level = sum(all_float_samples) / len(all_float_samples)
+        rms_level = (sum(x*x for x in all_float_samples) / len(all_float_samples)) ** 0.5
+        
+        # Calculate optimal gain
+        target_peak = 0.8  # Target 80% of max to avoid clipping
+        target_rms = 0.2   # Target RMS level
+        
+        if max_level > 0:
+            peak_gain = target_peak / max_level
+            rms_gain = target_rms / rms_level if rms_level > 0 else 1.0
+            
+            # Use the more conservative gain to avoid clipping
+            optimal_gain = min(peak_gain, rms_gain * 1.5)  # Allow some RMS boost
+            optimal_gain = max(1.0, min(optimal_gain, 8.0))  # Limit gain between 1x and 8x
+            
+            current_app.logger.info(f"🎚️ Audio Analysis Results:")
+            current_app.logger.info(f"   • Original Peak: {max_level:.4f} ({20*math.log10(max_level) if max_level > 0 else -100:.1f}dB)")
+            current_app.logger.info(f"   • Original RMS: {rms_level:.4f} ({20*math.log10(rms_level) if rms_level > 0 else -100:.1f}dB)")
+            current_app.logger.info(f"   • Optimal Gain: {optimal_gain:.2f}x ({20*math.log10(optimal_gain):.1f}dB boost)")
+        else:
+            optimal_gain = 4.0  # Default gain if no signal detected
+            current_app.logger.warning("⚠️ No audio signal detected, using default 4x gain")
+    else:
+        optimal_gain = 4.0
+        current_app.logger.warning("⚠️ No samples to analyze, using default 4x gain")
+    
+    # Second pass: convert with optimal gain
+    current_app.logger.info(f"🎵 Converting audio with {optimal_gain:.2f}x gain...")
+    full_audio_bytes_s16le = bytearray(num_samples * 2)
+    
+    for i in range(num_samples):
+        float_val = struct.unpack_from('<f', full_audio_bytes_f32le, i * 4)[0]
+        
+        # Apply optimal gain and clipping protection
+        gained_val = float_val * optimal_gain
+        clipped_val = max(-1.0, min(1.0, gained_val))
+        int_val = int(clipped_val * 32767.0)
+        
         struct.pack_into('<h', full_audio_bytes_s16le, i * 2, int_val)
-    current_app.logger.info(f"Total concatenated int16 audio bytes: {len(full_audio_bytes_s16le)}.")
+    
+    current_app.logger.info(f"Total concatenated int16 audio bytes: {len(full_audio_bytes_s16le)} (with {optimal_gain:.2f}x gain).")
 
     output_filename = "generated_speech.wav"
     current_app.logger.info(f"Attempting to save audio to server file: {output_filename}")
@@ -210,7 +257,8 @@ def my_processing_function(text):
 # NEW FUNCTION FOR STREAMING TTS VIA SOCKETIO
 def my_processing_function_streaming(text: str, logger) -> Generator[bytes, None, None]:
     """
-    Stream TTS audio chunks with optimized timing and consistent chunk sizes.
+    Stream TTS audio chunks with online IIR smoothing filter.
+    Real-time streaming with gentle audio smoothing.
     """
     logger.info(f"Starting TTS streaming for text: '{text[:50]}...'")
     
@@ -246,11 +294,18 @@ def my_processing_function_streaming(text: str, logger) -> Generator[bytes, None
         # Buffer for accumulating partial frames
         audio_buffer = bytearray()
         
+        # One-pole IIR filter state for online audio smoothing
+        # y[n] = a * x[n] + (1-a) * y[n-1]
+        filter_alpha = 0.35  # Increased from 0.15 - less smoothing, more clarity
+        filter_state = 0.0   # Previous output sample
+        gentle_gain = 2.2    # Increased from 1.8 to compensate for less smoothing
+        
         # Use correct frame size for 20ms frames at 22050Hz
-        # 20ms = 0.02s, 22050 samples/s * 0.02s = 441 samples
-        # 441 samples * 2 bytes/sample = 882 bytes per frame
         FRAME_SIZE_BYTES = 441 * 2  # 882 bytes
         
+        logger.info(f"🎵 Starting real-time streaming with IIR smoothing (α={filter_alpha}, gain={gentle_gain}x)...")
+        
+        # REAL-TIME STREAMING with IIR smoothing
         for item in response:
             if hasattr(item, 'type') and item.type == 'chunk':
                 if hasattr(item, 'data') and isinstance(item.data, str):
@@ -263,24 +318,43 @@ def my_processing_function_streaming(text: str, logger) -> Generator[bytes, None
                             chunk_count += 1
                             total_bytes += len(audio_bytes_f32le)
                             
-                            # Convert float32 little-endian to int16 little-endian
+                            # REAL-TIME PROCESSING: Convert with IIR smoothing
                             num_samples = len(audio_bytes_f32le) // 4
                             audio_bytes_s16le = bytearray(num_samples * 2)
                             
+                            # Process each sample with one-pole IIR filter
                             for i in range(num_samples):
                                 float_val = struct.unpack_from('<f', audio_bytes_f32le, i * 4)[0]
-                                int_val = int(max(-1.0, min(1.0, float_val)) * 32767.0)
+                                
+                                # Apply gentle gain first
+                                gained_val = float_val * gentle_gain
+                                
+                                # Apply one-pole IIR smoothing filter
+                                # y[n] = α * x[n] + (1-α) * y[n-1]
+                                filter_state = filter_alpha * gained_val + (1 - filter_alpha) * filter_state
+                                
+                                # Soft clipping with gentle saturation
+                                if filter_state > 1.0:
+                                    smoothed_val = 1.0 - math.exp(-(filter_state - 1.0))  # Soft clip positive
+                                elif filter_state < -1.0:
+                                    smoothed_val = -1.0 + math.exp(-(abs(filter_state) - 1.0))  # Soft clip negative
+                                else:
+                                    smoothed_val = filter_state
+                                
+                                # Convert to int16
+                                int_val = int(smoothed_val * 32767.0)
+                                int_val = max(-32768, min(32767, int_val))  # Hard limit for safety
+                                
                                 struct.pack_into('<h', audio_bytes_s16le, i * 2, int_val)
                             
                             # Add to buffer
                             audio_buffer.extend(audio_bytes_s16le)
                             
-                            # Yield complete frames from buffer
+                            # IMMEDIATE YIELDING: Yield frames as soon as they're ready
                             while len(audio_buffer) >= FRAME_SIZE_BYTES:
                                 frame = bytes(audio_buffer[:FRAME_SIZE_BYTES])
                                 audio_buffer = audio_buffer[FRAME_SIZE_BYTES:]
                                 yield frame
-                                # Remove the blocking sleep - let the client handle timing
                                 
                     except Exception as decode_error:
                         logger.error(f"Error decoding base64 audio data: {decode_error}")
@@ -298,11 +372,162 @@ def my_processing_function_streaming(text: str, logger) -> Generator[bytes, None
                 audio_buffer.extend(b'\x00' * remaining_bytes)
             yield bytes(audio_buffer)
         
-        logger.info(f"TTS streaming completed: {chunk_count} audio chunks, {total_bytes} total bytes")
+        logger.info(f"✅ Real-time streaming with IIR smoothing completed: {chunk_count} chunks, {total_bytes} bytes")
         
     except Exception as e:
         logger.error(f"Error in TTS streaming: {e}")
         raise
+
+def diagnose_cartesia_audio_quality(text: str, logger) -> dict:
+    """
+    Diagnostic function to analyze Cartesia audio quality without streaming.
+    Returns detailed analysis for debugging purposes.
+    """
+    logger.info(f"🔬 Starting Cartesia audio quality diagnosis for: '{text[:50]}...'")
+    
+    try:
+        # Initialize Cartesia client
+        api_key = os.getenv("CARTESIA_API_KEY")
+        if not api_key:
+            raise ValueError("CARTESIA_API_KEY environment variable not set.")
+        
+        client = Cartesia(api_key=api_key)
+        
+        # Get response from Cartesia
+        response = client.tts.sse(
+            model_id="sonic-english",
+            transcript=text,
+            voice={
+                "mode": "id",
+                "id": "b7d50908-b17c-442d-ad8d-810c63997ed9"
+            },
+            output_format={
+                "container": "raw",
+                "encoding": "pcm_f32le",
+                "sample_rate": 22050
+            }
+        )
+        
+        # Collect all audio data
+        raw_chunks = []
+        chunk_sizes = []
+        
+        for item in response:
+            if hasattr(item, 'type') and item.type == 'chunk':
+                if hasattr(item, 'data') and isinstance(item.data, str):
+                    import base64
+                    audio_bytes = base64.b64decode(item.data)
+                    if len(audio_bytes) > 0:
+                        raw_chunks.append(audio_bytes)
+                        chunk_sizes.append(len(audio_bytes))
+        
+        if not raw_chunks:
+            return {"error": "No audio chunks received from Cartesia"}
+        
+        # Analyze all samples
+        all_samples = []
+        for chunk in raw_chunks:
+            num_samples = len(chunk) // 4
+            for i in range(num_samples):
+                float_val = struct.unpack_from('<f', chunk, i * 4)[0]
+                all_samples.append(float_val)
+        
+        if not all_samples:
+            return {"error": "No audio samples found"}
+        
+        # Calculate comprehensive statistics
+        abs_samples = [abs(x) for x in all_samples]
+        max_level = max(abs_samples)
+        min_level = min(abs_samples)
+        avg_level = sum(abs_samples) / len(abs_samples)
+        rms_level = (sum(x*x for x in abs_samples) / len(abs_samples)) ** 0.5
+        
+        # Dynamic range analysis
+        dynamic_range_db = 20 * math.log10(max_level / min_level) if min_level > 0 else float('inf')
+        
+        # Peak analysis
+        peak_threshold = max_level * 0.9
+        peaks = [x for x in abs_samples if x >= peak_threshold]
+        peak_percentage = (len(peaks) / len(abs_samples)) * 100
+        
+        # Clipping analysis (values at or near maximum)
+        clipping_threshold = 0.99
+        clipped_samples = [x for x in abs_samples if x >= clipping_threshold]
+        clipping_percentage = (len(clipped_samples) / len(abs_samples)) * 100
+        
+        # Volume distribution analysis
+        quiet_threshold = max_level * 0.1
+        medium_threshold = max_level * 0.5
+        loud_threshold = max_level * 0.8
+        
+        quiet_samples = len([x for x in abs_samples if x < quiet_threshold])
+        medium_samples = len([x for x in abs_samples if quiet_threshold <= x < medium_threshold])
+        loud_samples = len([x for x in abs_samples if medium_threshold <= x < loud_threshold])
+        very_loud_samples = len([x for x in abs_samples if x >= loud_threshold])
+        
+        # Calculate optimal gain
+        target_peak = 0.8
+        target_rms = 0.2
+        peak_gain = target_peak / max_level if max_level > 0 else 1.0
+        rms_gain = target_rms / rms_level if rms_level > 0 else 1.0
+        recommended_gain = min(peak_gain, rms_gain * 1.5)
+        recommended_gain = max(1.0, min(recommended_gain, 8.0))
+        
+        diagnosis = {
+            "cartesia_analysis": {
+                "total_chunks": len(raw_chunks),
+                "total_samples": len(all_samples),
+                "chunk_sizes": {
+                    "min": min(chunk_sizes),
+                    "max": max(chunk_sizes),
+                    "avg": sum(chunk_sizes) / len(chunk_sizes)
+                }
+            },
+            "audio_levels": {
+                "peak_level": max_level,
+                "peak_level_db": 20 * math.log10(max_level) if max_level > 0 else -100,
+                "min_level": min_level,
+                "avg_level": avg_level,
+                "avg_level_db": 20 * math.log10(avg_level) if avg_level > 0 else -100,
+                "rms_level": rms_level,
+                "rms_level_db": 20 * math.log10(rms_level) if rms_level > 0 else -100,
+                "dynamic_range_db": dynamic_range_db
+            },
+            "quality_analysis": {
+                "peak_percentage": peak_percentage,
+                "clipping_percentage": clipping_percentage,
+                "volume_distribution": {
+                    "quiet_samples": quiet_samples,
+                    "medium_samples": medium_samples,
+                    "loud_samples": loud_samples,
+                    "very_loud_samples": very_loud_samples
+                }
+            },
+            "recommendations": {
+                "peak_gain": peak_gain,
+                "rms_gain": rms_gain,
+                "recommended_gain": recommended_gain,
+                "recommended_gain_db": 20 * math.log10(recommended_gain),
+                "issues": []
+            }
+        }
+        
+        # Add issue detection
+        if max_level < 0.1:
+            diagnosis["recommendations"]["issues"].append("Very low audio levels detected")
+        if clipping_percentage > 1.0:
+            diagnosis["recommendations"]["issues"].append(f"Clipping detected in {clipping_percentage:.1f}% of samples")
+        if dynamic_range_db < 6:
+            diagnosis["recommendations"]["issues"].append("Poor dynamic range (< 6dB)")
+        if rms_level < 0.05:
+            diagnosis["recommendations"]["issues"].append("Very low RMS level - audio may be too quiet")
+        
+        logger.info(f"✅ Cartesia audio diagnosis completed")
+        return diagnosis
+        
+    except Exception as e:
+        logger.error(f"Error in Cartesia audio diagnosis: {e}")
+        return {"error": str(e)}
 
 if __name__ == "__main__":
     # Ensure mock app is only if not in Flask context, and use a more specific logger name for clarity

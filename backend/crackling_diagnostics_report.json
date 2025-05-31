@@ -1,0 +1,30 @@
+{
+  "test_info": {
+    "focus": "Crackling/Popping Audio Artifacts",
+    "text": "This is a test for crackling and popping sounds in audio.",
+    "sample_rate": 22050,
+    "total_frames": 130,
+    "total_samples": 57330,
+    "avg_frame_size": 441.0
+  },
+  "crackling_analysis": {
+    "frame_boundary_issues": 0,
+    "boundary_discontinuities": [],
+    "total_issues_detected": 3,
+    "issues_list": [
+      "Audio pops detected: 30 instances",
+      "High HF spike rate: 47.86% (crackling risk)",
+      "Large HF spike detected: 0.2456 (audible artifact)"
+    ]
+  },
+  "likely_crackling_sources": [
+    "Audio pops within frames",
+    "High-frequency spikes"
+  ],
+  "recommendations": [
+    "Investigate sample rate conversion artifacts",
+    "Check for buffer underruns causing audio gaps",
+    "Add gentle low-pass filtering to remove HF artifacts",
+    "Check Web Audio API sample rate matching (22050Hz)"
+  ]
+}

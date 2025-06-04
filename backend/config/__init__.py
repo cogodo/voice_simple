@@ -1,1 +1,1 @@
-# Configuration package for voice agent backend 
+# Configuration package for voice agent backend

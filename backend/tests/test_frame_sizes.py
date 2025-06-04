@@ -18,11 +18,15 @@ print()
 
 # Verify calculations
 expected_samples = 441  # 22050 * 0.02 = 441
-expected_bytes = 882    # 441 * 2 = 882
+expected_bytes = 882  # 441 * 2 = 882
 
 print("=== Verification ===")
-print(f"Expected samples: {expected_samples}, Calculated: {SAMPLES_PER_FRAME}, Match: {SAMPLES_PER_FRAME == expected_samples}")
-print(f"Expected bytes: {expected_bytes}, Calculated: {BYTES_PER_FRAME}, Match: {BYTES_PER_FRAME == expected_bytes}")
+print(
+    f"Expected samples: {expected_samples}, Calculated: {SAMPLES_PER_FRAME}, Match: {SAMPLES_PER_FRAME == expected_samples}"
+)
+print(
+    f"Expected bytes: {expected_bytes}, Calculated: {BYTES_PER_FRAME}, Match: {BYTES_PER_FRAME == expected_bytes}"
+)
 print()
 
 # Test with different frame durations
@@ -37,4 +41,6 @@ print("=== Buffer Calculations ===")
 buffer_frames = 10  # 200ms buffer
 buffer_duration_ms = buffer_frames * FRAME_SIZE_MS
 buffer_bytes = buffer_frames * BYTES_PER_FRAME
-print(f"Ring Buffer: {buffer_frames} frames = {buffer_duration_ms}ms = {buffer_bytes} bytes") 
+print(
+    f"Ring Buffer: {buffer_frames} frames = {buffer_duration_ms}ms = {buffer_bytes} bytes"
+)

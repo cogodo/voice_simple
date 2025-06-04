@@ -1,0 +1,11 @@
+[build-system]
+# (you can leave this minimal if you're not packaging for PyPI; e.g. for pure linting you don’t strictly need a build backend,
+#  but if you ever do “pip install .” or “python -m build”, you should pick one. Example below uses setuptools:)
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.ruff]
+# → customize these values as needed; these are common defaults:
+lint.select = ["E", "W", "F"]      # which error/warning codes to enforce
+lint.ignore = ["E501", "W391"]     # codes to skip (e.g. long lines, trailing newlines)
+line-length = 88              # maximum allowed line length

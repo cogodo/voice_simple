@@ -348,54 +348,16 @@ def _process_transcribed_text_as_conversation(transcribed_text, app):
 
 
 def _trigger_auto_tts(text, app):
-    """Trigger automatic TTS synthesis for AI responses with real-time streaming."""
+    """Trigger automatic TTS synthesis using the exact same pipeline as the test button."""
     try:
-        app.logger.info(f"Auto-triggering real-time TTS for: '{text[:50]}...'")
+        app.logger.info(f"Auto-triggering TTS using EXACT same pipeline as test button for: '{text[:50]}...'")
         
-        # Import here to avoid circular imports
-        from services.voice_synthesis import my_processing_function_streaming
-        import time
+        # Use the EXACT same event that the test button uses
+        # This will go through the same pipeline: start_tts -> tts_started -> pcm_frame -> tts_completed
+        emit('start_tts', {'text': text})
         
-        # Start synthesis - use same format as TTS events
-        emit('tts_started', {'status': 'streaming'})
+        app.logger.info("Voice auto-TTS triggered using standard start_tts event (same as test button)")
         
-        # Stream frames in real-time as they're generated
-        app.logger.info("Starting real-time voice auto-TTS streaming...")
-        frame_count = 0
-        start_time = time.time()
-        
-        try:
-            for audio_chunk in my_processing_function_streaming(text, app.logger):
-                # Send frame immediately as it's generated
-                emit('pcm_frame', list(audio_chunk))
-                frame_count += 1
-                
-                # Log progress occasionally
-                if frame_count % 50 == 0:
-                    elapsed_time = time.time() - start_time
-                    app.logger.info(f"Voice auto-TTS: Real-time streamed {frame_count} frames in {elapsed_time:.2f}s")
-                
-                # Add proper pacing to match client processing speed
-                time.sleep(0.020)  # 20ms delay (matches 50 fps target)
-            
-        except Exception as e:
-            app.logger.error(f"Error in real-time voice auto-TTS streaming: {e}")
-            emit('tts_error', {'error': f'Voice auto-TTS real-time streaming failed: {str(e)}'})
-            return
-        
-        # Calculate final metrics
-        actual_duration = time.time() - start_time
-        
-        app.logger.info(f"Voice auto-TTS real-time streaming completed: {frame_count} frames in {actual_duration:.2f}s")
-        
-        emit('tts_completed', {
-            'status': 'completed', 
-            'frames_sent': frame_count,
-            'actual_duration_ms': int(actual_duration * 1000),
-            'source': 'voice_auto_tts',
-            'message': f'Voice auto-TTS real-time streamed {frame_count} frames in {actual_duration:.2f}s'
-        })
-            
     except Exception as e:
-        app.logger.error(f"Error in voice auto-TTS synthesis: {e}", exc_info=True)
-        emit('tts_error', {'error': f'Voice auto-TTS synthesis error: {str(e)}'}) 
+        app.logger.error(f"Error triggering voice auto-TTS: {e}", exc_info=True)
+        emit('tts_error', {'error': f'Voice auto-TTS trigger error: {str(e)}'}) 

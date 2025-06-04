@@ -6,6 +6,22 @@ from services.openai_handler import create_conversation_manager
 import time
 
 
+def _trigger_auto_tts(text, app):
+    """Trigger automatic TTS synthesis using the exact same pipeline as the test button."""
+    try:
+        app.logger.info(f"Auto-triggering TTS using EXACT same pipeline as test button for: '{text[:50]}...'")
+        
+        # Use the EXACT same event that the test button uses
+        # This will go through the same pipeline: start_tts -> tts_started -> pcm_frame -> tts_completed
+        emit('start_tts', {'text': text})
+        
+        app.logger.info("Auto-TTS triggered using standard start_tts event (same as test button)")
+        
+    except Exception as e:
+        app.logger.error(f"Error triggering auto-TTS: {e}", exc_info=True)
+        emit('tts_error', {'error': f'Auto-TTS trigger error: {str(e)}'})
+
+
 def register_conversation_events(socketio, app):
     """Register conversation-related WebSocket events."""
     
@@ -216,58 +232,5 @@ def register_conversation_events(socketio, app):
         except Exception as e:
             app.logger.error(f"Error processing voice input as conversation: {e}", exc_info=True)
             emit('conversation_error', {'error': f'Voice conversation error: {str(e)}'})
-    
-    def _trigger_auto_tts(text, app):
-        """Trigger automatic TTS synthesis for AI responses with real-time streaming."""
-        try:
-            app.logger.info(f"Auto-triggering real-time TTS for: '{text[:50]}...'")
-            
-            # Import here to avoid circular imports
-            from services.voice_synthesis import my_processing_function_streaming
-            import time
-            
-            # Start synthesis - use same format as TTS events
-            emit('tts_started', {'status': 'streaming'})
-            
-            # Stream frames in real-time as they're generated
-            app.logger.info("Starting real-time auto-TTS streaming...")
-            frame_count = 0
-            start_time = time.time()
-            
-            try:
-                for audio_chunk in my_processing_function_streaming(text, app.logger):
-                    # Send frame immediately as it's generated
-                    emit('pcm_frame', list(audio_chunk))
-                    frame_count += 1
-                    
-                    # Log progress occasionally
-                    if frame_count % 50 == 0:
-                        elapsed_time = time.time() - start_time
-                        app.logger.info(f"Auto-TTS: Real-time streamed {frame_count} frames in {elapsed_time:.2f}s")
-                    
-                    # Add proper pacing to match client processing speed
-                    time.sleep(0.020)  # 20ms delay (matches 50 fps target)
-                
-            except Exception as e:
-                app.logger.error(f"Error in real-time auto-TTS streaming: {e}")
-                emit('tts_error', {'error': f'Auto-TTS real-time streaming failed: {str(e)}'})
-                return
-            
-            # Calculate final metrics
-            actual_duration = time.time() - start_time
-            
-            app.logger.info(f"Auto-TTS real-time streaming completed: {frame_count} frames in {actual_duration:.2f}s")
-            
-            emit('tts_completed', {
-                'status': 'completed', 
-                'frames_sent': frame_count,
-                'actual_duration_ms': int(actual_duration * 1000),
-                'source': 'auto_tts',
-                'message': f'Auto-TTS real-time streamed {frame_count} frames in {actual_duration:.2f}s'
-            })
-            
-        except Exception as e:
-            app.logger.error(f"Error in auto-TTS synthesis: {e}", exc_info=True)
-            emit('tts_error', {'error': f'Auto-TTS synthesis error: {str(e)}'})
     
     return _process_transcribed_text_as_conversation 

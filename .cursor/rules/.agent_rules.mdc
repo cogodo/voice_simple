@@ -1,0 +1,29 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Voice Agent Backend Rules
+
+## Package Management
+- **ALWAYS use `uv` instead of `pip`** for package installations
+- **ALWAYS add newly installed packages to `requirements.txt`** immediately after installation
+- Use `uv add <package>` to install and automatically update requirements
+- Use `uv sync` to install from requirements.txt
+
+## Backend Server
+- **Assume the backend server is ALWAYS running** - do not start/stop it
+- The server runs on `http://localhost:8000`
+- If connection fails, focus on fixing the client/test code, not server startup
+- Server logs and errors should be checked separately if needed
+
+## Testing Workflow
+1. Install test dependencies with `uv`
+2. Update requirements.txt
+3. Run tests assuming server is active
+4. Fix issues in the code, not server management
+
+## File Organization
+- Tests go in the `tests/` directory when possible
+- Standalone test scripts can be in the root backend directory
+- Always clean up temporary test files 

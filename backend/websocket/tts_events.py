@@ -53,6 +53,24 @@ def register_tts_events(socketio, app):
             app.logger.error(f"Error starting TTS: {e}")
             emit('tts_error', {'error': str(e)})
 
+    @socketio.on('synthesize_speech_streaming')
+    def handle_synthesize_speech_streaming(data):
+        """Handle legacy synthesize_speech_streaming event (used by web test) - route to start_tts."""
+        try:
+            text = data.get('text', '')
+            if not text:
+                emit('tts_error', {'error': 'No text provided'})
+                return
+            
+            app.logger.info(f"Received synthesize_speech_streaming (legacy), routing to start_tts: '{text[:50]}...'")
+            
+            # Route to the standard start_tts handler for consistency
+            handle_start_tts(data)
+            
+        except Exception as e:
+            app.logger.error(f"Error handling synthesize_speech_streaming: {e}")
+            emit('tts_error', {'error': str(e)})
+
     def stream_tts_pcm_timed(text, session_id, socketio_instance, app_instance, stream_tracker):
         """Stream TTS audio as raw PCM frames in real-time."""
         try:

@@ -8,7 +8,6 @@ import os
 from config.settings import get_config
 from websocket.conversation_events import register_conversation_events
 from websocket.voice_events import register_voice_events
-from websocket.tts_events import register_tts_events
 
 
 def create_app(config_name=None):
@@ -37,8 +36,12 @@ def create_app(config_name=None):
     # Register WebSocket event handlers
     register_conversation_events(socketio, app)
     register_voice_events(socketio, app, voice_sessions)
+<<<<<<< HEAD
     register_tts_events(socketio, app)
 
+=======
+    
+>>>>>>> bug/streaming
     # Add cleanup for voice sessions on disconnect
     @socketio.on("disconnect")
     def handle_disconnect():
@@ -60,6 +63,7 @@ def create_app(config_name=None):
     def root():
         """Root endpoint to verify backend is running."""
         return {
+<<<<<<< HEAD
             "service": "Voice Agent Backend",
             "status": "running",
             "version": "1.0.0",
@@ -82,6 +86,17 @@ def create_app(config_name=None):
         )
         return send_file(test_file)
 
+=======
+            'service': 'Voice Agent Backend',
+            'status': 'running',
+            'version': '1.0.0',
+            'endpoints': {
+                'websocket': 'Connect to SocketIO for real-time communication',
+                'health': '/health for health checks'
+            }
+        }
+    
+>>>>>>> bug/streaming
     return app, socketio
 
 
@@ -105,12 +120,16 @@ def main():
     app.logger.info(f"Port: {config.PORT}")
     app.logger.info(f"Debug: {config.DEBUG}")
     app.logger.info(f"Temp Audio Dir: {config.TEMP_AUDIO_DIR}")
+<<<<<<< HEAD
 
     if config.CARTESIA_API_KEY:
         app.logger.info("✓ Cartesia API Key configured")
     else:
         app.logger.warning("✗ Cartesia API Key missing")
 
+=======
+    
+>>>>>>> bug/streaming
     if config.OPENAI_API_KEY:
         app.logger.info("✓ OpenAI API Key configured")
     else:

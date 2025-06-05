@@ -357,6 +357,7 @@ def _process_transcribed_text_as_conversation(transcribed_text, app):
 
             # Emit AI response
             app.logger.info("Emitting ai_response_complete...")
+<<<<<<< HEAD
             emit(
                 "ai_response_complete",
                 {
@@ -371,11 +372,21 @@ def _process_transcribed_text_as_conversation(transcribed_text, app):
             app.logger.info("Triggering auto-TTS...")
             _trigger_auto_tts(response, app)
 
+=======
+            emit('ai_response_complete', {
+                'response': response,
+                'role': 'assistant',
+                'content': response,
+                'timestamp': conversation_manager.get_current_timestamp()
+            })
+            
+>>>>>>> bug/streaming
         else:
             app.logger.error("No response generated from AI")
             emit("conversation_error", {"error": "Failed to generate AI response"})
 
     except Exception as e:
+<<<<<<< HEAD
         app.logger.error(
             f"Error processing transcribed text as conversation: {e}", exc_info=True
         )
@@ -447,3 +458,7 @@ def _trigger_auto_tts(text, app):
     except Exception as e:
         app.logger.error(f"Error in voice auto-TTS synthesis: {e}", exc_info=True)
         emit("tts_error", {"error": f"Voice auto-TTS synthesis error: {str(e)}"})
+=======
+        app.logger.error(f"Error processing transcribed text as conversation: {e}", exc_info=True)
+        emit('conversation_error', {'error': f'Failed to process voice message: {str(e)}'}) 
+>>>>>>> bug/streaming

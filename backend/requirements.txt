@@ -2,6 +2,7 @@ flask==3.0.0
 flask-socketio==5.3.6
 python-socketio==5.10.0
 python-engineio==4.9.0
+<<<<<<< HEAD
 bidict==0.23.1
 typing-extensions==4.14.0
 annotated-types==0.7.0
@@ -36,6 +37,13 @@ pydub>=0.25.1
 python-dotenv==1.0.0
 requests==2.31.0
 # SpeechRecognition>=3.10.0
+=======
+openai==1.84.0
+pydub>=0.25.1
+python-dotenv==1.0.0
+requests==2.31.0
+# speech-recognition>=3.10.0
+>>>>>>> bug/streaming
 webrtcvad>=2.0.10
 websocket-client>=1.8.0
 werkzeug==3.1.3

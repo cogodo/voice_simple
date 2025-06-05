@@ -144,6 +144,7 @@ def register_conversation_events(socketio, app):
 
                 # Emit AI response
                 app.logger.info("Emitting ai_response_complete...")
+<<<<<<< HEAD
                 emit(
                     "ai_response_complete",
                     {
@@ -158,6 +159,15 @@ def register_conversation_events(socketio, app):
                 app.logger.info("Triggering auto-TTS...")
                 _trigger_auto_tts(response, app)
 
+=======
+                emit('ai_response_complete', {
+                    'response': response,
+                    'role': 'assistant',
+                    'content': response,
+                    'timestamp': conversation_manager.get_current_timestamp()
+                })
+                
+>>>>>>> bug/streaming
             else:
                 app.logger.error("No response generated from AI")
                 emit("conversation_error", {"error": "Failed to generate AI response"})
@@ -222,6 +232,7 @@ def register_conversation_events(socketio, app):
                 conversation_manager.add_assistant_message(response)
 
                 # Emit AI response
+<<<<<<< HEAD
                 emit(
                     "ai_response_complete",
                     {
@@ -235,6 +246,15 @@ def register_conversation_events(socketio, app):
                 # Automatically synthesize and play speech for voice conversation
                 _trigger_auto_tts(response, app)
 
+=======
+                emit('ai_response_complete', {
+                    'response': response,
+                    'role': 'assistant',
+                    'content': response,
+                    'timestamp': conversation_manager.get_current_timestamp()
+                })
+                
+>>>>>>> bug/streaming
             else:
                 app.logger.error("No response generated from AI for voice input")
                 emit(
@@ -243,6 +263,7 @@ def register_conversation_events(socketio, app):
                 )
 
         except Exception as e:
+<<<<<<< HEAD
             app.logger.error(
                 f"Error processing voice input as conversation: {e}", exc_info=True
             )
@@ -312,3 +333,9 @@ def register_conversation_events(socketio, app):
             emit("tts_error", {"error": f"Auto-TTS synthesis error: {str(e)}"})
 
     return _process_transcribed_text_as_conversation
+=======
+            app.logger.error(f"Error processing voice input as conversation: {e}", exc_info=True)
+            emit('conversation_error', {'error': f'Voice conversation error: {str(e)}'})
+    
+    return _process_transcribed_text_as_conversation 
+>>>>>>> bug/streaming

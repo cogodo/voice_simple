@@ -334,30 +334,10 @@ def _process_transcribed_text_as_conversation(transcribed_text, app):
                 'timestamp': conversation_manager.get_current_timestamp()
             })
             
-            # Automatically synthesize speech for the response
-            app.logger.info("Triggering auto-TTS...")
-            _trigger_auto_tts(response, app)
-            
         else:
             app.logger.error("No response generated from AI")
             emit('conversation_error', {'error': 'Failed to generate AI response'})
         
     except Exception as e:
         app.logger.error(f"Error processing transcribed text as conversation: {e}", exc_info=True)
-        emit('conversation_error', {'error': f'Failed to process voice message: {str(e)}'})
-
-
-def _trigger_auto_tts(text, app):
-    """Trigger automatic TTS synthesis using the exact same pipeline as the test button."""
-    try:
-        app.logger.info(f"Auto-triggering TTS using EXACT same pipeline as test button for: '{text[:50]}...'")
-        
-        # Use the EXACT same event that the test button uses
-        # This will go through the same pipeline: start_tts -> tts_started -> pcm_frame -> tts_completed
-        emit('start_tts', {'text': text})
-        
-        app.logger.info("Voice auto-TTS triggered using standard start_tts event (same as test button)")
-        
-    except Exception as e:
-        app.logger.error(f"Error triggering voice auto-TTS: {e}", exc_info=True)
-        emit('tts_error', {'error': f'Voice auto-TTS trigger error: {str(e)}'}) 
+        emit('conversation_error', {'error': f'Failed to process voice message: {str(e)}'}) 

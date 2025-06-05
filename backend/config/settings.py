@@ -19,7 +19,6 @@ else:
     print(f"⚠️  WARNING: No .env file found at: {env_path}")
     print(f"Please create a .env file with your API keys:")
     print(f"OPENAI_API_KEY=your_openai_key_here")
-    print(f"CARTESIA_API_KEY=your_cartesia_key_here")
     print(f"")
     print(f"You can copy .env.example and fill in your keys.")
     response = input("Continue anyway? (y/N): ")
@@ -33,7 +32,6 @@ class Config:
     SECRET_KEY = os.urandom(24)
     
     # API Keys
-    CARTESIA_API_KEY = os.getenv("CARTESIA_API_KEY")
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
     
     # Server settings
@@ -41,7 +39,7 @@ class Config:
     PORT = int(os.getenv("PORT", 8000))
     DEBUG = os.getenv("DEBUG", "false").lower() == "true"
     
-    # Audio settings
+    # Audio settings (for voice input only)
     TEMP_AUDIO_DIR = os.path.join(os.path.dirname(__file__), "..", "temp_audio")
     AUDIO_QUALITY_THRESHOLD = float(os.getenv("AUDIO_QUALITY_THRESHOLD", "0.1"))
     MAX_AUDIO_DURATION = int(os.getenv("MAX_AUDIO_DURATION", "60"))  # seconds
@@ -54,18 +52,10 @@ class Config:
     OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
     MAX_CONVERSATION_HISTORY = int(os.getenv("MAX_CONVERSATION_HISTORY", "10"))
     
-    # Voice synthesis settings
-    DEFAULT_VOICE_ID = os.getenv("DEFAULT_VOICE_ID", "79a125e8-cd45-4c13-8a67-188112f4dd22")
-    VOICE_SPEED = float(os.getenv("VOICE_SPEED", "1.0"))
-    VOICE_EMOTION = os.getenv("VOICE_EMOTION", "neutral")
-    
     @classmethod
     def validate_config(cls):
         """Validate that required configuration is set."""
         errors = []
-        
-        if not cls.CARTESIA_API_KEY:
-            errors.append("CARTESIA_API_KEY environment variable is not set")
         
         if not cls.OPENAI_API_KEY:
             errors.append("OPENAI_API_KEY environment variable is not set")

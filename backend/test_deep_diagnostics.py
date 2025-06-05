@@ -177,39 +177,15 @@ class DeepDiagnostics:
         return success
     
     def test_voice_synthesis_initialization(self):
-        """Test voice synthesis (Cartesia) initialization."""
-        print("\n🧪 Test 4: Voice Synthesis Initialization")
+        """Test voice synthesis (Cartesia) initialization - DISABLED."""
+        print("\n🧪 Test 4: Voice Synthesis Initialization - DISABLED")
+        print("   ⚠️  TTS functionality has been removed")
+        print("   ℹ️  Voice input (speech-to-text) still available")
         
-        try:
-            from services.voice_synthesis import my_processing_function_streaming
-            
-            print("   ✅ Voice synthesis import successful")
-            
-            # Test if function is callable
-            if callable(my_processing_function_streaming):
-                print("   ✅ Voice synthesis function is callable")
-                success = True
-            else:
-                print("   ❌ Voice synthesis function is not callable")
-                self.issues_found.append("Voice synthesis function not callable")
-                success = False
-                
-        except ImportError as e:
-            print(f"   ❌ Cannot import voice synthesis: {e}")
-            self.issues_found.append(f"Voice synthesis import error: {str(e)}")
-            success = False
-        except Exception as e:
-            print(f"   ❌ Voice synthesis error: {e}")
-            self.issues_found.append(f"Voice synthesis error: {str(e)}")
-            success = False
-        
+        # Always pass this test since TTS is intentionally removed
+        success = True
         self.test_results['voice_synthesis'] = success
-        
-        if success:
-            print("   ✅ Voice Synthesis Initialization test PASSED")
-        else:
-            print("   ❌ Voice Synthesis Initialization test FAILED")
-            print("   💡 Fix: Check Cartesia API key and dependencies")
+        print("   ✅ Voice Synthesis test SKIPPED (intentionally disabled)")
         
         return success
     
@@ -219,7 +195,7 @@ class DeepDiagnostics:
         
         required_packages = [
             'openai',
-            'cartesia', 
+            # REMOVED: 'cartesia' - no longer needed for TTS
             'flask',
             'flask_socketio',
             'socketio',  # python-socketio is imported as 'socketio'
@@ -275,10 +251,8 @@ class DeepDiagnostics:
             register_voice_events(socketio, app, voice_sessions)
             print("   ✅ Voice events registered")
             
-            # Test TTS events
-            from websocket.tts_events import register_tts_events
-            register_tts_events(socketio, app)
-            print("   ✅ TTS events registered")
+            # REMOVED: TTS events registration - no longer available
+            print("   ⚠️  TTS events DISABLED (intentionally removed)")
             
             success = True
             
@@ -327,11 +301,10 @@ class DeepDiagnostics:
         if not self.test_results.get('environment', True):
             print("   🔧 Set up environment variables in .env file")
             print("      - OPENAI_API_KEY=your_openai_key")
-            print("      - CARTESIA_API_KEY=your_cartesia_key")
         
         if not self.test_results.get('dependencies', True):
             print("   🔧 Install missing dependencies:")
-            print("      uv pip install openai cartesia flask flask-socketio")
+            print("      uv pip install openai flask flask-socketio")
         
         if not self.test_results.get('openai', True):
             print("   🔧 Fix OpenAI issues:")
@@ -344,11 +317,6 @@ class DeepDiagnostics:
             print("      - Check Whisper model availability")
             print("      - Verify audio processing dependencies")
         
-        if not self.test_results.get('voice_synthesis', True):
-            print("   🔧 Fix Voice Synthesis issues:")
-            print("      - Verify Cartesia API key")
-            print("      - Check audio output configuration")
-        
         # Overall status
         all_critical_passed = (
             self.test_results.get('environment', False) and
@@ -360,7 +328,8 @@ class DeepDiagnostics:
         print(f"\n🎯 OVERALL STATUS:")
         if all_critical_passed:
             print("   🎉 ALL CRITICAL SYSTEMS OPERATIONAL")
-            print("   🚀 Ready for voice agent functionality")
+            print("   🚀 Ready for voice agent functionality (voice input + LLM responses)")
+            print("   ℹ️  Note: TTS (audio output) functionality has been intentionally removed")
         else:
             print("   ⚠️  CRITICAL ISSUES NEED ATTENTION")
             print("   🔧 Fix issues above before testing voice features")

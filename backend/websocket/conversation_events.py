@@ -6,22 +6,6 @@ from services.openai_handler import create_conversation_manager
 import time
 
 
-def _trigger_auto_tts(text, app):
-    """Trigger automatic TTS synthesis using the exact same pipeline as the test button."""
-    try:
-        app.logger.info(f"Auto-triggering TTS using EXACT same pipeline as test button for: '{text[:50]}...'")
-        
-        # Use the EXACT same event that the test button uses
-        # This will go through the same pipeline: start_tts -> tts_started -> pcm_frame -> tts_completed
-        emit('start_tts', {'text': text})
-        
-        app.logger.info("Auto-TTS triggered using standard start_tts event (same as test button)")
-        
-    except Exception as e:
-        app.logger.error(f"Error triggering auto-TTS: {e}", exc_info=True)
-        emit('tts_error', {'error': f'Auto-TTS trigger error: {str(e)}'})
-
-
 def register_conversation_events(socketio, app):
     """Register conversation-related WebSocket events."""
     
@@ -152,10 +136,6 @@ def register_conversation_events(socketio, app):
                     'timestamp': conversation_manager.get_current_timestamp()
                 })
                 
-                # Automatically synthesize speech for the response
-                app.logger.info("Triggering auto-TTS...")
-                _trigger_auto_tts(response, app)
-                
             else:
                 app.logger.error("No response generated from AI")
                 emit('conversation_error', {'error': 'Failed to generate AI response'})
@@ -221,9 +201,6 @@ def register_conversation_events(socketio, app):
                     'content': response,
                     'timestamp': conversation_manager.get_current_timestamp()
                 })
-                
-                # Automatically synthesize and play speech for voice conversation
-                _trigger_auto_tts(response, app)
                 
             else:
                 app.logger.error("No response generated from AI for voice input")
